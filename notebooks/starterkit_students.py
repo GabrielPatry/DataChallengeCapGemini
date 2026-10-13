@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.25.1"
-app = marimo.App()
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -124,23 +124,23 @@ def _(mo):
 def _():
     import pandas as pd
 
-    df = pd.read_csv("data/incidents_students.csv")
+    df : pd.DataFrame = pd.read_csv("../data/incidents_students.csv")
     print(df["document_format"].value_counts())
 
-    df = df[df["document_format"] == "text"].reset_index(drop=True)
+    df : pd.DataFrame = df[df["document_format"] == "text"].reset_index(drop=True)
     print(df.shape)
     df.head()
     return (df,)
 
 
 @app.cell
-def _(df):
+def _(df: "pd.DataFrame"):
     df["asset_type"].value_counts(), df["severity"].value_counts()
     return
 
 
 @app.cell
-def _(df):
+def _(df: "pd.DataFrame"):
     for text in df["text"].sample(3, random_state=0):
         print(text)
         print("-" * 80)
@@ -160,7 +160,7 @@ def _(mo):
 
 
 @app.cell
-def _(EMBEDDING_DEPLOYMENT, client, df, os):
+def _(EMBEDDING_DEPLOYMENT, client, df: "pd.DataFrame", os):
     import math
     import re
     import time
@@ -250,7 +250,7 @@ def _(mo):
 
 
 @app.cell
-def _(df, embeddings):
+def _(df: "pd.DataFrame", embeddings):
     from bertopic import BERTopic
     from umap import UMAP
     from hdbscan import HDBSCAN
@@ -357,7 +357,7 @@ def _(mo):
 
 
 @app.cell
-def _(df, topic_model):
+def _(df: "pd.DataFrame", topic_model):
     def show_topic_examples(topic_id: int, n: int = 3) -> None:
         print("Mots-clés :", [word for word, _ in topic_model.get_topic(topic_id)])
         examples = df.loc[df["topic"] == topic_id, "text"].head(n)
