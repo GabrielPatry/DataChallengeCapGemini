@@ -158,10 +158,25 @@ The starter kit notebook (`notebooks/starterkit_students.py`) follows this pipel
 3. **Compute embeddings** — calls Azure OpenAI embeddings in batches, with retry on rate limits
    and local caching (`embeddings_students.npy`) to avoid recomputation.
 4. **Topic modeling** — BERTopic with UMAP (dimensionality reduction) + HDBSCAN (clustering)
-   + CountVectorizer (French stopwords).
-5. **Explore results** — topic info, bar charts, hierarchy visualization, example documents.
-6. **Next steps** — suggestions for extending the pipeline (PDF processing, agent-based
+   + CountVectorizer (French stopwords). It exhaustively tests integer `min_cluster_size` values
+   from 2 to 20% of the wind incident count, then refits only values where the cluster count
+   changes for downstream comparison.
+5. **Select cluster size** — compares the retained `min_cluster_size` values and sends the observed
+   fusions, incident texts, and severities to Azure OpenAI on button click. Azure prioritizes
+   preserving diagnostically distinct clusters and reports remaining redundant topic groups.
+6. **Explore results** — topic info, bar charts, hierarchy visualization, example documents.
+7. **Name clusters** — prepares an ordered harness containing every topic name and all of its
+   texts, then sends it to the configured Azure OpenAI chat deployment on button click. The
+   response maps each existing topic ID and name to a concise, distinctive French name; topic
+   `-1` remains labeled as unclassified noise.
+8. **Next steps** — suggestions for extending the pipeline (PDF processing, agent-based
    remediation, cross-referencing with metadata, etc.).
+
+The two Azure chat requests print their actual input/output token usage and an **estimated**
+USD cost after completion. The estimate assumes public pay-as-you-go GPT-4.1 nano rates
+($0.10/1M uncached input tokens, $0.025/1M cached input tokens, $0.40/1M output tokens);
+actual charges can differ with the deployed model, region, pricing agreement, or billing mode.
+See [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/azure-openai/).
 
 ## Useful commands
 
