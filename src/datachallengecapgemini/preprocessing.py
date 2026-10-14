@@ -177,7 +177,7 @@ def digital_pdf_dir_to_csv(input_path: Path, output_csv_path: Path) -> tuple[int
     pdf_files = input_path.glob("*.pdf")
     n_total = 0
     n_success = 0
-    records: list[dict | None] = []
+    records: list[dict] = []
     for pdf_file in pdf_files:
         n_total += 1
         record = digital_pdf_to_table_record(pdf_file)
@@ -374,25 +374,50 @@ def parse_ocr_json(json_path: Path) -> dict | None:
             value = ASSET_TYPE_MAP.get(value, value)
         record[csv_col] = value
 
-    # --- Extract incident description (Text block, reading_order == 3) ---
-    # Verify the SectionHeader at reading_order == 2 mentions "Description"
-    section_header = next(
-        (b for b in blocks if b.get("reading_order") == 2),
-        None,
-    )
-    if section_header is not None:
-        header_text = _strip_html(section_header.get("html", ""))
-        if "description" not in header_text.lower():
-            print(
-                f"  Warning: SectionHeader at ro=2 is '{header_text}', "
-                "expected 'Description de l'incident'"
-            )
+    # --- Extract incident description ---
+    # Two possible layouts:
+    #   A) Description is a separate Text block (reading_order == 3) below a
+    #      SectionHeader "Description de l'incident" (reading_order == 2).
+    #   B) The OCR model merged the description into the Table block itself,
+    #      as extra rows after the metadata rows:
+    #        <tr><td colspan="2"><b>Description de l'incident</b></td></tr>
+    #        <tr><td colspan="2"><p>…description…</p></td></tr>
+    description_text = ""
 
-    text_block = next(
-        (b for b in blocks if b.get("reading_order") == 3),
-        None,
-    )
-    record["text"] = _strip_html(text_block.get("html", "")) if text_block else ""
+    # Try layout B first: look for a "Description de l'incident" row in the
+    # parsed table, then take the following row's cell as the description.
+    for i, row in enumerate(parser.rows):
+        if (
+            row
+            and "description de l'incident" in row[0].lower()
+            and i + 1 < len(parser.rows)
+            and parser.rows[i + 1]
+        ):
+            description_text = parser.rows[i + 1][0]
+            break
+
+    if not description_text:
+        # Layout A: separate Text block at reading_order == 3.
+        # Verify the SectionHeader at reading_order == 2 mentions "Description"
+        section_header = next(
+            (b for b in blocks if b.get("reading_order") == 2),
+            None,
+        )
+        if section_header is not None:
+            header_text = _strip_html(section_header.get("html", ""))
+            if "description" not in header_text.lower():
+                print(
+                    f"  Warning: SectionHeader at ro=2 is '{header_text}', "
+                    "expected 'Description de l'incident'"
+                )
+
+        text_block = next(
+            (b for b in blocks if b.get("reading_order") == 3),
+            None,
+        )
+        description_text = _strip_html(text_block.get("html", "")) if text_block else ""
+
+    record["text"] = description_text
 
     # --- incident_id from filename (e.g. incident_1.json -> 1) ---
     try:
