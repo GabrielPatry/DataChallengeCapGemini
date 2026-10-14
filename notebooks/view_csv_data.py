@@ -71,6 +71,90 @@ def _(df_merged, mo):
 
 
 @app.cell
+def _(df_merged, mo):
+    equipment_selector = mo.ui.dropdown(
+        options=sorted(df_merged["equipment_id"].dropna().unique().tolist()),
+        label="Select Equipment ID",
+        value=sorted(df_merged["equipment_id"].dropna().unique().tolist())[0]
+        if len(df_merged["equipment_id"].dropna().unique()) > 0
+        else None,
+    )
+
+    equipment_selector
+    return (equipment_selector,)
+
+
+@app.cell
+def _(equipment_selector):
+    site_selected = equipment_selector.value
+    return (site_selected,)
+
+
+@app.cell
+def _(df_merged, mo, pd, px, site_selected):
+    def _():
+        # Filter df_merged by equipment_id matching site_selected
+        df_equipment = df_merged[
+            df_merged["equipment_id"] == site_selected
+        ].copy()
+
+        # Ensure date is datetime
+        df_equipment["date"] = pd.to_datetime(df_equipment["date"])
+
+        # Group by date and sum costs to get one point per day
+        df_daily_cost = (
+            df_equipment.groupby("date")["estimated_cost_eur"]
+            .sum()
+            .reset_index()
+        )
+
+        # Create full date range from min to max
+        min_date = df_daily_cost["date"].min()
+        max_date = df_daily_cost["date"].max()
+        full_date_range = pd.date_range(start=min_date, end=max_date, freq="D")
+
+        # Reindex to fill missing dates with 0
+        df_daily_cost = (
+            df_daily_cost.set_index("date")
+            .reindex(full_date_range, fill_value=0)
+            .reset_index()
+        )
+        df_daily_cost = df_daily_cost.rename(columns={"index": "date"})
+
+        # Create line plot with markers
+        fig_equipment_time = px.line(
+            df_daily_cost,
+            x="date",
+            y="estimated_cost_eur",
+            title=f"Daily Estimated Cost Over Time - Equipment ID: {site_selected}",
+            labels={
+                "date": "Date",
+                "estimated_cost_eur": "Estimated Cost (EUR)",
+            },
+        )
+        fig_equipment_time.update_traces(mode="lines+markers")
+
+        # Prepare incident descriptions ordered by date
+        df_descriptions = (
+            df_equipment[["date", "text","estimated_cost_eur"]]
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+
+        # Display plot and descriptions below
+        return mo.vstack(
+            [
+                fig_equipment_time,
+                mo.md("### Incident descriptions (ordered by date)"),
+                mo.ui.table(df_descriptions, selection=None),
+            ]
+        )
+
+    _()
+    return
+
+
+@app.cell
 def _(mo):
     mo.md("""
     ## Visualising costs versus equipment_id
@@ -182,12 +266,7 @@ def _(df_merged, mo, pd):
     fig_time.update_traces(mode="lines", marker=dict(size=8))
 
     mo.vstack([fig_equipment, fig_time])
-    return
-
-
-@app.cell
-def _():
-    return
+    return (px,)
 
 
 if __name__ == "__main__":

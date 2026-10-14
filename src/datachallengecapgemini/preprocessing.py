@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import re
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -537,27 +538,49 @@ def merge_csv(
         return
     if sorting_col is not None:
         merged_df.sort_values(by=sorting_col)
+
+    # renaming elements from the column 'asset_type'
+    important_column = 'asset_type'
+
+    rename_dict = {
+        "Centrale photovoltaique" : "solar",
+        "Centrale photovoltaïque" : "solar",
+        "Parc éolien" : "wind",
+    }
+    merged_df[important_column] = merged_df[important_column].replace(rename_dict)
+
     merged_df.to_csv(output_dir, index =  False)
     print("Successfully merged CSV files !")
 
 
 # ---------------------------------------------------------------------------
-# CLI entry point
+# CLI helpers (shared with the top-level datachallengecapgemini entry point)
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
-    """CLI entry point — ``uv run datachallengecapgemini-preprocess``."""
-    parser = argparse.ArgumentParser(
-        description="OCR scanned PDFs with Surya, then parse the results into a CSV."
-    )
+@dataclass
+class PreprocessingArgs:
+    """Arguments for the preprocessing pipeline (OCR + parse + merge)."""
+
+    input_dir: Path
+    digital_input_dir: Path
+    output_dir: Path
+    limit: int | None
+    force: bool
+    output_csv: Path
+    output_digital_csv: Path
+    output_merged_csv: Path
+    reference_csv: Path
+
+
+def add_preprocessing_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add preprocessing-specific arguments to *parser*."""
     parser.add_argument(
         "--input-dir",
         type=Path,
         default=PROJECT_ROOT / "data" / "pdf_scan",
         help="Directory containing scanned PDF files.",
     )
-
     parser.add_argument(
         "--digital-input-dir",
         type=Path,
@@ -587,32 +610,28 @@ def main() -> None:
         default=PROJECT_ROOT / "data" / "incidents_students_scanned.csv",
         help="Path for the parsed output CSV.",
     )
-
     parser.add_argument(
-            "--output-merged-csv",
-            type=Path,
-            default=PROJECT_ROOT / "data" / "incidents_students_merged.csv",
-            help="Path for the merged output CSV.",
+        "--output-merged-csv",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "incidents_students_merged.csv",
+        help="Path for the merged output CSV.",
     )
-
     parser.add_argument(
         "--output-digital-csv",
         type=Path,
         default=PROJECT_ROOT / "data" / "incidents_students_digital.csv",
         help="Path to the parsed from digital PDF output CSV.",
     )
-
     parser.add_argument(
         "--reference-csv",
         type=Path,
         default=PROJECT_ROOT / "data" / "incidents_students.csv",
         help="Reference CSV for cross-validation (site comparison).",
     )
-    args = parser.parse_args()
 
-    if args.limit is not None and args.limit < 1:
-        parser.error("--limit must be at least 1")
 
+def run_preprocessing(args: PreprocessingArgs) -> None:
+    """Run the full preprocessing pipeline: OCR → parse scanned → parse digital → merge."""
     # Step 1 — OCR
     ocr_directory(
         args.input_dir,
@@ -632,7 +651,7 @@ def main() -> None:
         reference_csv_path=args.reference_csv,
     )
 
-    # Step 3 - Parse digital CSV
+    # Step 3 — Parse digital PDFs
     print()
     print("=" * 60)
     print("Step 3: Parsing digital PDFs")
@@ -642,11 +661,46 @@ def main() -> None:
         args.output_digital_csv,
     )
 
-    # Step 4 - Merging csv
+    # Step 4 — Merge CSVs
     print("=" * 60)
     print("Step 4: Merging CSV")
     print("=" * 60)
-    merge_csv([args.output_digital_csv,args.output_csv,args.reference_csv],args.output_merged_csv)
+    merge_csv(
+        [args.output_digital_csv, args.output_csv, args.reference_csv],
+        args.output_merged_csv,
+    )
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """CLI entry point — ``uv run datachallengecapgemini-preprocess``."""
+    parser = argparse.ArgumentParser(
+        description="OCR scanned PDFs with Surya, then parse the results into a CSV."
+    )
+    add_preprocessing_arguments(parser)
+    args = parser.parse_args()
+
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be at least 1")
+
+    run_preprocessing(
+        PreprocessingArgs(
+            input_dir=args.input_dir,
+            digital_input_dir=args.digital_input_dir,
+            output_dir=args.output_dir,
+            limit=args.limit,
+            force=args.force,
+            output_csv=args.output_csv,
+            output_digital_csv=args.output_digital_csv,
+            output_merged_csv=args.output_merged_csv,
+            reference_csv=args.reference_csv,
+        )
+    )
+
 
 if __name__ == "__main__":
     main()
