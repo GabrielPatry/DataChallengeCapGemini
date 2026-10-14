@@ -1,18 +1,20 @@
 # DataChallengeCapGemini
 
-Starter kit for the **Hackathon Mines Paris 2026** — incident analysis for PV (solar) and wind assets.
+Starter kit for the **Cap-Gemini DataChallenge for Mines Paris 2026** — incident analysis for PV (solar) and wind assets.
 
 The goal is to build an agentic pipeline that, starting from incident reports in
-`data/incidents_students.csv`, performs:
+`data/incidents_students.csv` and pdf reports in `data/pdf_scan` and `data/pdf_digital`, performs:
 
 - **Topic modeling** (grouping incidents by theme),
 - **Root-cause analysis**,
 - **Global statistics** (by site, severity, seasonality, downtime, cost, etc.),
 - **Remediation proposals** (maintenance actions, technical improvements).
 
-This repository ships the first building block — topic modeling — as a [marimo](https://marimo.io) notebook.
+The first building block — topic modeling — was already provided as a notebook, that was converted by us as a [marimo](https://marimo.io) notebook.
 
 ## Project structure
+
+to run the project, it is important to include the `.env` file and the `data` folder to the cloned repository. In the end, you should have the following structure :
 
 ```
 ├── data/                          # Incident data (CSV + PDFs, gitignored)
@@ -34,11 +36,19 @@ This repository ships the first building block — topic modeling — as a [mari
 - **Python 3.13** (pinned in `.python-version`)
 - **[uv](https://docs.astral.sh/uv/)** — fast Python package and environment manager
 
-Install uv if you don't have it:
+Install uv if you don't have it (here is the command for linux installation):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+For the preprocessing, you might need to install llamacpp (command for linux installation below).
+
+```bash
+curl -LsSf https://llama.app/install.sh | sh
+```
+
+Running the preprocessing requires the `llama-server` command, but it seems that this one was replaced by `llama server` in recent builds. Thus, a pragmatic approach is to create a command `llama-server` doing `llama server`. I agree this is not ideal ... but we could apparently change surya settings so it connect to an already running server, and we skip this part.
 
 ## Setup
 
@@ -101,6 +111,22 @@ Three document formats are present:
 | `pdf_scan`    | Scanned PDF (image, requires OCR)             | `data/pdf_scan/`    |
 
 The starter kit only uses the `text` subset (~600 reports) to get you started quickly.
+
+## Running the pipeline
+
+The full pipeline can be runned using:
+
+```bash
+uv run datachallengecapgemini
+```
+
+Note that by default, running this skip the preprocessing, and expect a csv file with incident descriptions at the directory specified after the `--output-merged-csv` flag, which is `data/incidents_students_merged.csv` by default. As the preprocesing run locally and can be very long, we recommand asking a team-mate having a good computer to compute the final csv file, then use it directly.
+
+You can also start the preprocessing only using:
+
+```bash
+uv run datachallengecapgemini-preprocess
+```
 
 ## Running the notebook
 
@@ -183,7 +209,7 @@ See [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/azu
 | Command | Description |
 |---------|-------------|
 | `uv sync` | Install / update all dependencies |
-| `uv sync --dev` | Install including dev dependencies (marimo) |
+| `uv sync --dev` | Install including dev dependencies (marimo,ruff,ty) |
 | `uv add <package>` | Add a new dependency |
 | `uv run marimo edit notebooks/starterkit_students.py` | Edit the notebook |
 | `uv run marimo run notebooks/starterkit_students.py` | Run the notebook (read-only app mode) |
@@ -195,5 +221,5 @@ See [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/azu
 - **BERTopic** — topic modeling
 - **UMAP / HDBSCAN** — dimensionality reduction and clustering
 - **Azure OpenAI** — embeddings (`text-embedding-3-small`) and chat (`gpt-4.1-nano`)
-- **pandas / numpy / matplotlib** — data manipulation and visualization
+- **pandas / numpy / matplotlib / plotly** — data manipulation and visualization
 - **uv** — dependency and environment management
