@@ -1,16 +1,15 @@
-"""Plotting step — build plotly figures from the merged incidents CSV.
+"""Plotting step — build plotly figures from the solar and wind incidents CSVs.
 
-``PlotFactory`` wraps the merged incidents dataframe (the output of the
-preprocessing step, e.g. ``data/incidents_students_merged.csv``) and exposes
-one ``plot_*`` method per figure. Every method returns a
-``plotly.graph_objects.Figure`` built from the dataframe held in the ``df``
-attribute.
+``SolarPlotFactory`` and ``WindPlotFactory`` each wrap one clusterised
+incidents dataframe and expose one ``plot_*`` method per figure. Every method
+returns a ``plotly.graph_objects.Figure`` built from the dataframe held in the
+``df`` attribute.
 
 The pipeline iterates over every ``plot_*`` method (see
-``PlotFactory.plot_method_names``) and saves each figure twice in the plots
-output directory: once as a PNG in the ``png`` subfolder (requires the
-``kaleido`` package) and once as an interactive HTML page in the ``html``
-subfolder.
+``PlotFactory.plot_method_names``) and saves each figure twice in separate
+solar and wind output directories: once as a PNG in the ``png`` subfolder
+(requires the ``kaleido`` package) and once as an interactive HTML page in the
+``html`` subfolder.
 
 Available as a CLI step through the top-level ``datachallengecapgemini``
 entry point:
@@ -40,18 +39,15 @@ SEVERITY_ORDER: list[str] = ["mineure", "modérée", "sévère"]
 
 
 class PlotFactory:
-    """Builds plotly figures from the merged incidents dataframe.
+    """Builds plotly figures from an incidents dataframe.
 
     The dataframe is the main attribute (``df``). Use ``PlotFactory.from_csv``
-    to load and validate it from the merged CSV produced by the preprocessing
-    step, or pass a dataframe directly to the constructor.
+    to load and validate it from a CSV, or pass a dataframe directly to the
+    constructor.
     """
 
-    # Columns the factory requests from the merged CSV. These are the columns
-    # of data/incidents_students_merged.csv that the plots rely on. ``text``,
-    # ``document_format`` and ``document_path`` are intentionally excluded:
-    # ``document_path`` is legitimately NaN for ``text``-format incidents
-    # (they have no PDF file), so it cannot be part of a NaN-free requirement.
+    # Columns the plots rely on. ``text``, ``document_format`` and
+    # ``document_path`` are intentionally excluded.
     REQUIRED_COLUMNS: ClassVar[list[str]] = [
         "site",
         "asset_type",
@@ -352,41 +348,67 @@ class PlotFactory:
         return fig
 
 
+class SolarPlotFactory(PlotFactory):
+    """Build plots from the clusterised solar incidents dataframe."""
+
+
+class WindPlotFactory(PlotFactory):
+    """Build plots from the clusterised wind incidents dataframe."""
+
+
 # ---------------------------------------------------------------------------
 # Pipeline step — build every plot and save it as PNG + HTML
 # ---------------------------------------------------------------------------
 
 
-def run_plotting(merged_csv_path: Path, plots_output_dir: Path) -> None:
-    """Build every plot of ``PlotFactory`` and save them under *plots_output_dir*.
+def run_plotting(
+    solar_csv_path: Path, wind_csv_path: Path, plots_output_dir: Path
+) -> None:
+    """Build solar and wind plots under separate directories in *plots_output_dir*.
 
     Each figure is saved twice: as ``<name>.png`` in the ``png`` subfolder and
-    as ``<name>.html`` in the ``html`` subfolder, where ``<name>`` is the
+    as ``<name>.html`` in the ``html`` subfolder, where ``<name>`` is a
     ``plot_*`` method name.
     """
-    factory = PlotFactory.from_csv(merged_csv_path)
+    for label, factory_type, csv_path in (
+        ("solar", SolarPlotFactory, solar_csv_path),
+        ("wind", WindPlotFactory, wind_csv_path),
+    ):
+        factory = factory_type.from_csv(csv_path)
+        output_dir = plots_output_dir / label
+        png_dir = output_dir / "png"
+        html_dir = output_dir / "html"
+        png_dir.mkdir(parents=True, exist_ok=True)
+        html_dir.mkdir(parents=True, exist_ok=True)
 
-    png_dir = plots_output_dir / "png"
-    html_dir = plots_output_dir / "html"
-    png_dir.mkdir(parents=True, exist_ok=True)
-    html_dir.mkdir(parents=True, exist_ok=True)
+        for name in factory_type.plot_method_names():
+            fig = getattr(factory, name)()
+            png_path = png_dir / f"{name}.png"
+            html_path = html_dir / f"{name}.html"
+            fig.write_image(png_path)
+            fig.write_html(html_path)
+            print(f"Saved {png_path}")
+            print(f"Saved {html_path}")
 
-    for name in PlotFactory.plot_method_names():
-        fig = getattr(factory, name)()
-        png_path = png_dir / f"{name}.png"
-        html_path = html_dir / f"{name}.html"
-        fig.write_image(png_path)
-        fig.write_html(html_path)
-        print(f"Saved {png_path}")
-        print(f"Saved {html_path}")
-
-    print(
-        f"Done. {len(PlotFactory.plot_method_names())} plots are in {plots_output_dir}"
-    )
+        print(
+            f"Done. {len(factory_type.plot_method_names())} {label} plots are in {output_dir}"
+        )
 
 
 def add_plotting_arguments(parser: argparse.ArgumentParser) -> None:
     """Add plotting-specific arguments to *parser*."""
+    parser.add_argument(
+        "--solar-csv",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "incidents_clusterised_solar.csv",
+        help="Path to the clusterised solar incidents CSV.",
+    )
+    parser.add_argument(
+        "--wind-csv",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "incidents_clusterised_wind.csv",
+        help="Path to the clusterised wind incidents CSV.",
+    )
     parser.add_argument(
         "--plots-output-dir",
         type=Path,

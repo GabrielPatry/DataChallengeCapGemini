@@ -144,7 +144,11 @@ The full pipeline can be runned using:
 uv run datachallengecapgemini
 ```
 
-Note that by default, running this skip the preprocessing, and expect a csv file with incident descriptions at the directory specified after the `--output-merged-csv` flag, which is `data/incidents_students_merged.csv` by default. As the preprocesing run locally and can be very long, we recommand asking a team-mate having a good computer to compute the final csv file, then use it directly.
+By default, plotting skips preprocessing and reads the pre-existing
+`data/incidents_clusterised_solar.csv` and
+`data/incidents_clusterised_wind.csv` files. Override their locations with
+`--solar-csv` and `--wind-csv`. Solar and wind plots are written separately
+under `data/plots/solar` and `data/plots/wind`.
 
 You can also start the preprocessing only using:
 

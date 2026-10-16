@@ -2,7 +2,11 @@
 
 import argparse
 
-from datachallengecapgemini.plot_factory import PlotFactory
+from datachallengecapgemini.plot_factory import (
+    PlotFactory,
+    SolarPlotFactory,
+    WindPlotFactory,
+)
 from datachallengecapgemini.preprocessing import (
     ocr_directory,
     ocr_pdf,
@@ -12,6 +16,8 @@ from datachallengecapgemini.preprocessing import (
 
 __all__ = [
     "PlotFactory",
+    "SolarPlotFactory",
+    "WindPlotFactory",
     "ocr_directory",
     "ocr_pdf",
     "parse_ocr_directory",
@@ -66,11 +72,12 @@ def main() -> None:
 
     else:
         print(
-            f"Skipping preprocessing, assuming the merged csv is in {args.output_merged_csv}..."
+            "Skipping preprocessing, assuming the clusterised solar and wind "
+            f"CSVs already exist at {args.solar_csv} and {args.wind_csv}..."
         )
 
     print()
     print("=" * 60)
-    print("Plotting: generating plots from the merged CSV")
+    print("Plotting: generating separate solar and wind plots")
     print("=" * 60)
-    run_plotting(args.output_merged_csv, args.plots_output_dir)
+    run_plotting(args.solar_csv, args.wind_csv, args.plots_output_dir)
