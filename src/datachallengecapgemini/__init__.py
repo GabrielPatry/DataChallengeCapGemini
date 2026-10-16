@@ -27,6 +27,10 @@ __all__ = [
 
 def main() -> None:
     """CLI entry point — ``uv run datachallengecapgemini``."""
+    from datachallengecapgemini.pdf_export import (
+        add_pdf_arguments,
+        run_pdf_export,
+    )
     from datachallengecapgemini.plot_factory import (
         add_plotting_arguments,
         run_plotting,
@@ -60,6 +64,9 @@ def main() -> None:
     add_report_arguments(
         parser
     )  # adding report generation specific arguments to the pipeline parser
+    add_pdf_arguments(
+        parser
+    )  # adding PDF export specific arguments to the pipeline parser
 
     args = parser.parse_args()
 
@@ -100,3 +107,12 @@ def main() -> None:
         args.templates_dir,
         args.reports_output_dir,
     )
+
+    if args.skip_pdf:
+        print("Skipping PDF export (--skip-pdf)...")
+    else:
+        print()
+        print("=" * 60)
+        print("PDF export: converting markdown reports to PDF with pandoc")
+        print("=" * 60)
+        run_pdf_export(args.reports_output_dir)
