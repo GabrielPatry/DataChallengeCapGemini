@@ -251,15 +251,21 @@ def build_report_context(
 
     # Clusters, largest first; the noise cluster is reported separately
     cluster_counts = (
-        df.groupby(["cluster_code", "cluster_name"]).size().sort_values(ascending=False)
+        df.groupby(["cluster_code", "cluster_name"])
+        .size()
+        .to_frame("incident_count")
+        .reset_index()
+        .sort_values("incident_count", ascending=False)
     )
-    is_noise = (
-        cluster_counts.index.get_level_values("cluster_code") == NOISE_CLUSTER_CODE
-    )
-    thematic_counts = cluster_counts[~is_noise]
+    thematic_counts = cluster_counts[
+        cluster_counts["cluster_code"] != NOISE_CLUSTER_CODE
+    ]
 
     rows = ["| Cluster | Incidents | Share |", "| --- | ---: | ---: |"]
-    for (code, name), count in cluster_counts.items():
+    for _, cluster in cluster_counts.iterrows():
+        code = cluster["cluster_code"]
+        name = cluster["cluster_name"]
+        count = cluster["incident_count"]
         cell = (
             f"{name} (unclassified)"
             if code == NOISE_CLUSTER_CODE
@@ -269,9 +275,12 @@ def build_report_context(
     top_clusters_table = "\n".join(rows)
 
     sections = []
-    for i, ((code, name), count) in enumerate(
-        thematic_counts.head(N_DETAILED_CLUSTERS).items()
+    for i, (_, cluster) in enumerate(
+        thematic_counts.head(N_DETAILED_CLUSTERS).iterrows()
     ):
+        code = cluster["cluster_code"]
+        name = cluster["cluster_name"]
+        count = cluster["incident_count"]
         cluster_df = df[df["cluster_code"] == code]
         cluster_top_site = (
             cluster_df.groupby("site")["estimated_cost_eur"].sum().idxmax()
