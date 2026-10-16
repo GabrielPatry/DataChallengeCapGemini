@@ -26,6 +26,7 @@ import pdfplumber as pb
 from surya.inference import SuryaInferenceManager
 from surya.input.load import load_pdf
 from surya.recognition import RecognitionPredictor
+from surya.settings import settings
 
 # Project root: src/datachallengecapgemini/preprocessing.py -> 3 levels up
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -279,15 +280,18 @@ def ocr_directory(
         print("Nothing to do — all PDFs already have OCR output.")
         return done
 
+    if not settings.SURYA_INFERENCE_URL:
+        raise RuntimeError(
+            "No external Surya inference server configured. Start the llama.cpp "
+            "server and set SURYA_INFERENCE_URL (for example, "
+            "http://127.0.0.1:8080/v1) before running preprocessing."
+        )
+
     manager = SuryaInferenceManager(method="llamacpp")
     predictor = RecognitionPredictor(manager)
-    print(
-        f"Starting Surya's {manager.method} backend. "
-        "On first run, this may download the inference image and model.",
-        flush=True,
-    )
+    print(f"Connecting to the Surya {manager.method} server...", flush=True)
     manager.start()
-    print("Surya backend is ready.", flush=True)
+    print("Surya server is ready.", flush=True)
 
     try:
         for index, (pdf_path, output_path) in enumerate(todo, start=1):

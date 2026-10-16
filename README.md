@@ -42,13 +42,37 @@ Install uv if you don't have it (here is the command for linux installation):
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-For the preprocessing, you might need to install llamacpp (command for linux installation below).
+Scanned-PDF preprocessing uses Surya OCR with a llama.cpp server. Install
+[llama.cpp](https://github.com/ggml-org/llama.cpp/blob/master/docs/install.md),
+including the `llama` command with the `serve` subcommand:
 
 ```bash
 curl -LsSf https://llama.app/install.sh | sh
 ```
 
-Running the preprocessing requires the `llama-server` command, but it seems that this one was replaced by `llama server` in recent builds. Thus, a pragmatic approach is to create a command `llama-server` doing `llama server`. I agree this is not ideal ... but we could apparently change surya settings so it connect to an already running server, and we skip this part.
+Start the server in a separate terminal. The `-hf` option downloads Surya's
+GGUF model and its multimodal projector automatically the first time:
+
+```bash
+llama serve -hf datalab-to/surya-ocr-2-gguf \
+  --host 127.0.0.1 \
+  --port 8080 \
+  --alias datalab-to/surya-ocr-2 \
+  --ctx-size 16384 \
+  --parallel 1
+```
+
+Keep that server running while preprocessing. In another terminal, point Surya
+to it and run the preprocessing command:
+
+```bash
+export SURYA_INFERENCE_URL=http://127.0.0.1:8080/v1
+uv run datachallengecapgemini-preprocess
+```
+
+Preprocessing does not start the server or download the model. It stops with
+an error if `SURYA_INFERENCE_URL` is missing, or if the configured server is
+unavailable or serving a different model.
 
 ## Setup
 

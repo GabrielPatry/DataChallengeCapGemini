@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.25.1"
-app = marimo.App()
+app = marimo.App(width="medium")
 
 
 @app.cell
@@ -146,8 +146,13 @@ def _(
 
     # Test de connexion : isole un problème de config (endpoint / version / déploiement)
     # avant de lancer le calcul des embeddings sur tout le jeu de données.
-    _probe = client.embeddings.create(model=EMBEDDING_DEPLOYMENT, input=["test"])
-    print("Connexion OK, dimension des embeddings :", len(_probe.data[0].embedding))
+    _probe = client.embeddings.create(
+        model=EMBEDDING_DEPLOYMENT, input=["test"]
+    )
+    print(
+        "Connexion OK, dimension des embeddings :",
+        len(_probe.data[0].embedding),
+    )
     return (client,)
 
 
@@ -175,10 +180,10 @@ def _(mo):
 def _():
     import pandas as pd
 
-    df = pd.read_csv("../data/incidents_students.csv")
+    df = pd.read_csv("data/incidents_students_merged.csv")
     print(df["document_format"].value_counts())
 
-    df = df[df["document_format"] == "text"].reset_index(drop=True)
+    # df = df[df["document_format"] == "text"].reset_index(drop=True)
     print(df.shape)
     print(df.head())
     return df, pd
@@ -220,12 +225,10 @@ def _(EMBEDDING_DEPLOYMENT, client, df, os):
     from openai import RateLimitError
     from tqdm import tqdm
 
-
     def wait_with_progress(seconds: int, desc: str) -> None:
         """Attente avec barre de progression (décompte en secondes)."""
         for _ in tqdm(range(seconds), desc=desc, unit="s", leave=False):
             time.sleep(1)
-
 
     def embed_batch_with_retry(batch: list[str], max_attempts: int = 10):
         """Appelle l'API d'embeddings ; sur erreur 429, attend le délai indiqué par Azure puis réessaie.
@@ -243,19 +246,33 @@ def _(EMBEDDING_DEPLOYMENT, client, df, os):
                     raise
                 match = re.search(r"retry after (\d+) seconds", str(e))
                 wait = int(match.group(1)) + 1 if match else 30
-                wait_with_progress(wait, f"Quota embeddings atteint (429), tentative {attempt}/{max_attempts}")
-
+                wait_with_progress(
+                    wait,
+                    f"Quota embeddings atteint (429), tentative {attempt}/{max_attempts}",
+                )
 
     def azure_embed_documents(
-        docs: list[str], batch_size: int = 16, partial_path: str = "embeddings_students.partial.npy"
+        docs: list[str],
+        batch_size: int = 16,
+        partial_path: str = "embeddings_students.partial.npy",
     ) -> np.ndarray:
         """Calcule les embeddings par lots ; la progression est sauvegardée pour reprendre après interruption."""
-        all_embeddings = list(np.load(partial_path)) if os.path.exists(partial_path) else []
-        start = len(all_embeddings) // batch_size  # on ne garde que des lots complets
+        all_embeddings = (
+            list(np.load(partial_path)) if os.path.exists(partial_path) else []
+        )
+        start = (
+            len(all_embeddings) // batch_size
+        )  # on ne garde que des lots complets
         all_embeddings = all_embeddings[: start * batch_size]
         n_batches = math.ceil(len(docs) / batch_size)
 
-        for i in tqdm(range(start, n_batches), desc="Embeddings", unit="lot", initial=start, total=n_batches):
+        for i in tqdm(
+            range(start, n_batches),
+            desc="Embeddings",
+            unit="lot",
+            initial=start,
+            total=n_batches,
+        ):
             batch = docs[i * batch_size : (i + 1) * batch_size]
             response = embed_batch_with_retry(batch)
             all_embeddings.extend(item.embedding for item in response.data)
@@ -273,30 +290,46 @@ def _(EMBEDDING_DEPLOYMENT, client, df, os):
     embeddings_solar = None
     if os.path.exists(embeddings_path_wind):
         cached_wind = np.load(embeddings_path_wind)
-        if cached_wind.ndim == 2 and cached_wind.shape[0] == len(df[df["asset_type"] == "wind"]):
+        if cached_wind.ndim == 2 and cached_wind.shape[0] == len(
+            df[df["asset_type"] == "wind"]
+        ):
             embeddings_wind = cached_wind
         else:
             # Cache incohérent (calcul partiel, autre jeu de données...) : on le recalcule
-            print(f"Cache ignoré : forme {cached_wind.shape}, attendu ({len(df[df['asset_type'] == 'wind'])}, dim)")
+            print(
+                f"Cache ignoré : forme {cached_wind.shape}, attendu ({len(df[df['asset_type'] == 'wind'])}, dim)"
+            )
 
     if os.path.exists(embeddings_path_solar):
         cached_solar = np.load(embeddings_path_solar)
-        if cached_solar.ndim == 2 and cached_solar.shape[0] == len(df[df["asset_type"] == "solar"]):
+        if cached_solar.ndim == 2 and cached_solar.shape[0] == len(
+            df[df["asset_type"] == "solar"]
+        ):
             embeddings_solar = cached_solar
         else:
             # Cache incohérent (calcul partiel, autre jeu de données...) : on le recalcule
-            print(f"Cache ignoré : forme {cached_solar.shape}, attendu ({len(df[df['asset_type'] == 'solar'])}, dim)")
+            print(
+                f"Cache ignoré : forme {cached_solar.shape}, attendu ({len(df[df['asset_type'] == 'solar'])}, dim)"
+            )
 
     if embeddings_wind is None:
-        embeddings_wind = azure_embed_documents(df[df["asset_type"] == "wind"]["text"].tolist())
+        embeddings_wind = azure_embed_documents(
+            df[df["asset_type"] == "wind"]["text"].tolist()
+        )
         np.save(embeddings_path_wind, embeddings_wind)
     if embeddings_solar is None:
-        embeddings_solar = azure_embed_documents(df[df["asset_type"] == "solar"]["text"].tolist())
+        embeddings_solar = azure_embed_documents(
+            df[df["asset_type"] == "solar"]["text"].tolist()
+        )
         np.save(embeddings_path_solar, embeddings_solar)
 
-    assert embeddings_wind.shape[0] == len(df[df["asset_type"] == "wind"]), f"{embeddings_wind.shape[0]} embeddings pour {len(df)} documents"
+    assert embeddings_wind.shape[0] == len(df[df["asset_type"] == "wind"]), (
+        f"{embeddings_wind.shape[0]} embeddings pour {len(df)} documents"
+    )
     print(embeddings_wind.shape)
-    assert embeddings_solar.shape[0] == len(df[df["asset_type"] == "solar"]), f"{embeddings_solar.shape[0]} embeddings pour {len(df)} documents"
+    assert embeddings_solar.shape[0] == len(df[df["asset_type"] == "solar"]), (
+        f"{embeddings_solar.shape[0]} embeddings pour {len(df)} documents"
+    )
     print(embeddings_solar.shape)
     embeddings_by_asset = {
         "wind": embeddings_wind,
@@ -475,7 +508,9 @@ def _(
             for index in range(1, len(exhaustive_sizes))
             if exhaustive_counts[index] != exhaustive_counts[index - 1]
         ]
-        selected_sizes = [exhaustive_sizes[index] for index in selected_indices]
+        selected_sizes = [
+            exhaustive_sizes[index] for index in selected_indices
+        ]
 
         topics_by_size = []
         models = []
@@ -520,7 +555,6 @@ def _(
         )
         return selected_sizes, topics_by_size, models, topic_counts
 
-
     sizes, all_topics, all_models, n_topics_by_size = compare_cluster_sizes(
         df,
         asset_type,
@@ -541,9 +575,13 @@ def _(np):
         new_topics = np.asarray(new_topics)
 
         if old_topics.ndim != 1 or new_topics.ndim != 1:
-            raise ValueError("Les assignations de topics doivent être des tableaux 1D.")
+            raise ValueError(
+                "Les assignations de topics doivent être des tableaux 1D."
+            )
         if len(old_topics) != len(new_topics):
-            raise ValueError("Les deux modèles doivent avoir les mêmes documents, dans le même ordre.")
+            raise ValueError(
+                "Les deux modèles doivent avoir les mêmes documents, dans le même ordre."
+            )
         if texts is not None and len(texts) != len(old_topics):
             raise ValueError("Il faut un texte par assignation de topic.")
 
@@ -565,10 +603,15 @@ def _(np):
                 if texts is not None and len(shared_indices):
                     new_indices = np.flatnonzero(new_mask)
                     examples[(old_id, new_id)] = {
-                        "old": [texts[index] for index in old_indices[:n_examples]],
-                        "new": [texts[index] for index in new_indices[:n_examples]],
+                        "old": [
+                            texts[index] for index in old_indices[:n_examples]
+                        ],
+                        "new": [
+                            texts[index] for index in new_indices[:n_examples]
+                        ],
                         "shared": [
-                            texts[index] for index in shared_indices[:n_examples]
+                            texts[index]
+                            for index in shared_indices[:n_examples]
                         ],
                     }
 
@@ -617,9 +660,9 @@ def _(all_topics, overlap_matrix, plt, sizes):
         ax.set_xticks(range(len(new_ids)))
         ax.set_yticks(range(len(old_ids)))
         ax.set_xticklabels(
-        ["Bruit (-1)" if t == -1 else f"T{t}" for t in new_ids],
-        rotation=45,
-        ha="right",
+            ["Bruit (-1)" if t == -1 else f"T{t}" for t in new_ids],
+            rotation=45,
+            ha="right",
         )
         ax.set_yticklabels([f"T{t}" for t in old_ids])
 
@@ -629,7 +672,15 @@ def _(all_topics, overlap_matrix, plt, sizes):
                 val = M[r, c]
                 if val > 0:
                     color = "black" if val < 0.7 else "white"
-                    ax.text(c, r, f"{val:.2f}", ha="center", va="center", color=color, fontsize=7)
+                    ax.text(
+                        c,
+                        r,
+                        f"{val:.2f}",
+                        ha="center",
+                        va="center",
+                        color=color,
+                        fontsize=7,
+                    )
 
         fig.colorbar(im, ax=ax, label="Proportion des docs du topic ancien")
 
@@ -650,7 +701,9 @@ def _(all_topics, asset_type, df, overlap_matrix, sizes):
 
         def _format_examples(topic_id, examples):
             if not examples:
-                return mo.md(f"**Exemples du topic {topic_id} :** aucun exemple disponible.")
+                return mo.md(
+                    f"**Exemples du topic {topic_id} :** aucun exemple disponible."
+                )
             _items = []
             for _example in examples[:n_examples]:
                 _text = str(_example)
@@ -692,21 +745,28 @@ def _(all_topics, asset_type, df, overlap_matrix, sizes):
                         _old_id,
                         [
                             _texts[_doc_index]
-                            for _doc_index, _assigned_topic in enumerate(all_topics[_step])
+                            for _doc_index, _assigned_topic in enumerate(
+                                all_topics[_step]
+                            )
                             if _assigned_topic == _old_id
                         ][:n_examples],
                     )
                     for _old_id, _ in _sources
                 ]
                 _sections.append(
-                    mo.vstack([
-                        mo.md(
-                            f"### Topics fusionnés : "
-                            + " et ".join(str(_topic_id) for _topic_id in _old_topic_ids)
-                            + f" (min_cluster_size {sizes[_step]} → {sizes[_step + 1]})"
-                        ),
-                        *_examples_by_topic,
-                    ])
+                    mo.vstack(
+                        [
+                            mo.md(
+                                f"### Topics fusionnés : "
+                                + " et ".join(
+                                    str(_topic_id)
+                                    for _topic_id in _old_topic_ids
+                                )
+                                + f" (min_cluster_size {sizes[_step]} → {sizes[_step + 1]})"
+                            ),
+                            *_examples_by_topic,
+                        ]
+                    )
                 )
 
         if not _sections:
@@ -715,7 +775,6 @@ def _(all_topics, asset_type, df, overlap_matrix, sizes):
                 f"de {threshold:.0%}."
             )
         return mo.vstack(_sections)
-
 
     display_topic_fusions(threshold=0.5, n_examples=2, max_chars=500)
     return
@@ -742,11 +801,17 @@ def _(all_topics, asset_type, df, np, pd, sizes):
     _incident_severities = _asset_rows["severity"].tolist()
 
     if len(sizes) != len(all_topics):
-        raise ValueError("Le nombre de tailles candidates ne correspond pas aux assignations.")
+        raise ValueError(
+            "Le nombre de tailles candidates ne correspond pas aux assignations."
+        )
     if not all(isinstance(_text, str) for _text in _incident_texts):
-        raise ValueError("Tous les incidents du harness doivent avoir un texte.")
+        raise ValueError(
+            "Tous les incidents du harness doivent avoir un texte."
+        )
     if len(_incident_texts) != len(_incident_severities):
-        raise ValueError("Les textes et les sévérités des incidents ne sont pas alignés.")
+        raise ValueError(
+            "Les textes et les sévérités des incidents ne sont pas alignés."
+        )
 
     def _severity_for_incident(_incident_index):
         _severity = _incident_severities[_incident_index]
@@ -756,7 +821,9 @@ def _(all_topics, asset_type, df, np, pd, sizes):
     _assignment_arrays = []
     for _size, _assignments in zip(sizes, all_topics):
         _assignment_array = np.asarray(_assignments)
-        if _assignment_array.ndim != 1 or len(_assignment_array) != len(_incident_texts):
+        if _assignment_array.ndim != 1 or len(_assignment_array) != len(
+            _incident_texts
+        ):
             raise ValueError(
                 f"Les assignations de min_cluster_size={_size} ne correspondent pas "
                 f"aux {len(_incident_texts)} incidents de type {asset_type}."
@@ -767,10 +834,12 @@ def _(all_topics, asset_type, df, np, pd, sizes):
             for _topic_id in set(_assignment_array.tolist())
             if int(_topic_id) != -1
         )
-        _candidate_records.append({
-            "min_cluster_size": int(_size),
-            "number_of_clusters": len(_topic_ids),
-        })
+        _candidate_records.append(
+            {
+                "min_cluster_size": int(_size),
+                "number_of_clusters": len(_topic_ids),
+            }
+        )
 
     _fusion_records = []
     _rng = np.random.default_rng(42)
@@ -785,52 +854,63 @@ def _(all_topics, asset_type, df, np, pd, sizes):
 
         for _new_topic_id in _new_topic_ids:
             _new_indices = np.flatnonzero(_new_assignments == _new_topic_id)
-            _source_topic_ids = sorted({
-                int(_old_topic_id)
-                for _old_topic_id in _old_assignments[_new_indices]
-                if int(_old_topic_id) != -1
-            })
+            _source_topic_ids = sorted(
+                {
+                    int(_old_topic_id)
+                    for _old_topic_id in _old_assignments[_new_indices]
+                    if int(_old_topic_id) != -1
+                }
+            )
             if len(_source_topic_ids) < 2:
                 continue
 
             _source_clusters = []
             for _source_topic_id in _source_topic_ids:
-                _source_indices = np.flatnonzero(_old_assignments == _source_topic_id)
+                _source_indices = np.flatnonzero(
+                    _old_assignments == _source_topic_id
+                )
                 _sample_indices = _rng.choice(
                     _source_indices,
                     size=min(5, len(_source_indices)),
                     replace=False,
                 )
-                _source_clusters.append({
-                    "topic_id": _source_topic_id,
-                    "incident_samples": [
-                        {
-                            "severity": _severity_for_incident(_incident_index),
-                            "text": _incident_texts[_incident_index],
-                        }
-                        for _incident_index in _sample_indices
-                    ],
-                })
+                _source_clusters.append(
+                    {
+                        "topic_id": _source_topic_id,
+                        "incident_samples": [
+                            {
+                                "severity": _severity_for_incident(
+                                    _incident_index
+                                ),
+                                "text": _incident_texts[_incident_index],
+                            }
+                            for _incident_index in _sample_indices
+                        ],
+                    }
+                )
 
-            _fusion_records.append({
-                "from_min_cluster_size": int(sizes[_step]),
-                "to_min_cluster_size": int(sizes[_step + 1]),
-                "source_clusters": _source_clusters,
-            })
+            _fusion_records.append(
+                {
+                    "from_min_cluster_size": int(sizes[_step]),
+                    "to_min_cluster_size": int(sizes[_step + 1]),
+                    "source_clusters": _source_clusters,
+                }
+            )
 
     cluster_selection_harness = {
         "asset_type": asset_type,
         "candidate_sizes": _candidate_records,
         "fusions_between_consecutive_sizes": _fusion_records,
     }
-    cluster_selection_summary = pd.DataFrame([
-        {
-            "min_cluster_size": _candidate["min_cluster_size"],
-            "number_of_clusters": _candidate["number_of_clusters"],
-        }
-        for _candidate in _candidate_records
-    ])
-
+    cluster_selection_summary = pd.DataFrame(
+        [
+            {
+                "min_cluster_size": _candidate["min_cluster_size"],
+                "number_of_clusters": _candidate["number_of_clusters"],
+            }
+            for _candidate in _candidate_records
+        ]
+    )
 
     cluster_selection_summary
     return (cluster_selection_harness,)
@@ -913,10 +993,14 @@ def _(
         report_chat_cost(_response, "choix de min_cluster_size")
         _content = _response.choices[0].message.content
         if not _content:
-            raise ValueError("Azure a renvoyé une réponse vide pour le choix de taille.")
+            raise ValueError(
+                "Azure a renvoyé une réponse vide pour le choix de taille."
+            )
 
         _result = _json.loads(_content)
-        if not isinstance(_result, dict) or set(_result) != {"min_cluster_size"}:
+        if not isinstance(_result, dict) or set(_result) != {
+            "min_cluster_size"
+        }:
             raise ValueError(
                 "La réponse Azure doit contenir uniquement 'min_cluster_size'."
             )
@@ -961,9 +1045,9 @@ def _(
             "Choisissez d'abord `min_cluster_size` avec le bouton précédent."
         )
     else:
-        _chosen_index = [
-            int(_size) for _size in sizes
-        ].index(optimal_min_cluster_size)
+        _chosen_index = [int(_size) for _size in sizes].index(
+            optimal_min_cluster_size
+        )
         _chosen_assignments = np.asarray(all_topics[_chosen_index])
         _asset_rows = df.loc[
             df["asset_type"] == cluster_selection_harness["asset_type"]
@@ -1004,20 +1088,24 @@ def _(
                 size=min(5, len(_topic_indices)),
                 replace=False,
             )
-            _redundancy_harness["clusters"].append({
-                "topic_id": _topic_id,
-                "incident_samples": [
-                    {
-                        "severity": (
-                            None
-                            if pd.isna(_incident_severities[_incident_index])
-                            else str(_incident_severities[_incident_index])
-                        ),
-                        "text": _incident_texts[_incident_index],
-                    }
-                    for _incident_index in _sample_indices
-                ],
-            })
+            _redundancy_harness["clusters"].append(
+                {
+                    "topic_id": _topic_id,
+                    "incident_samples": [
+                        {
+                            "severity": (
+                                None
+                                if pd.isna(
+                                    _incident_severities[_incident_index]
+                                )
+                                else str(_incident_severities[_incident_index])
+                            ),
+                            "text": _incident_texts[_incident_index],
+                        }
+                        for _incident_index in _sample_indices
+                    ],
+                }
+            )
 
         _redundancy_system_prompt = """Tu es un analyste chargé de prétraiter les informations
     pour préparer un rapport destiné à un client sur ses incidents techniques.
@@ -1064,7 +1152,9 @@ def _(
             response_format={"type": "json_object"},
             temperature=0,
         )
-        report_chat_cost(_redundancy_response, "analyse des clusters redondants")
+        report_chat_cost(
+            _redundancy_response, "analyse des clusters redondants"
+        )
         _redundancy_content = _redundancy_response.choices[0].message.content
         if not _redundancy_content:
             raise ValueError(
@@ -1086,7 +1176,10 @@ def _(
         _redundancy_groups = []
         _seen_redundancy_ids = set()
         for _group in _redundancy_result["redundant_groups"]:
-            if not isinstance(_group, dict) or set(_group) != {"topic_ids", "reason"}:
+            if not isinstance(_group, dict) or set(_group) != {
+                "topic_ids",
+                "reason",
+            }:
                 raise ValueError(
                     "Chaque groupe redondant doit contenir uniquement "
                     "'topic_ids' et 'reason'."
@@ -1097,7 +1190,8 @@ def _(
                 not isinstance(_topic_ids, list)
                 or len(_topic_ids) < 2
                 or any(
-                    not isinstance(_topic_id, int) or isinstance(_topic_id, bool)
+                    not isinstance(_topic_id, int)
+                    or isinstance(_topic_id, bool)
                     for _topic_id in _topic_ids
                 )
                 or not isinstance(_reason, str)
@@ -1108,7 +1202,9 @@ def _(
                     "et une justification non vide."
                 )
             if len(set(_topic_ids)) != len(_topic_ids):
-                raise ValueError("Un groupe redondant contient des IDs en double.")
+                raise ValueError(
+                    "Un groupe redondant contient des IDs en double."
+                )
             _unknown_ids = sorted(set(_topic_ids) - set(_chosen_topic_ids))
             if _unknown_ids:
                 raise ValueError(
@@ -1239,7 +1335,11 @@ def _(
         )
 
     umap_model = UMAP(
-        n_neighbors=15, n_components=5, min_dist=0.0, metric="cosine", random_state=42
+        n_neighbors=15,
+        n_components=5,
+        min_dist=0.0,
+        metric="cosine",
+        random_state=42,
     )
 
     hdbscan_model = HDBSCAN(
@@ -1263,13 +1363,14 @@ def _(
         verbose=True,
     )
 
-
     if asset_type not in embeddings_by_asset:
         raise ValueError(f"Type d'actif inconnu : {asset_type}")
     embeddings = embeddings_by_asset[asset_type]
 
     _asset_docs = df.loc[df["asset_type"] == asset_type, "text"].tolist()
-    topics, probs = topic_model.fit_transform(_asset_docs, embeddings=embeddings)
+    topics, probs = topic_model.fit_transform(
+        _asset_docs, embeddings=embeddings
+    )
     df["topic"] = pd.NA
     df.loc[df["asset_type"] == asset_type, "topic"] = topics
     print(f"{len(set(topics)) - (1 if -1 in topics else 0)} topics trouvés")
@@ -1292,7 +1393,7 @@ def _(topic_model):
 
 @app.cell
 def _(topic_model):
-    topic_model.visualize_barchart(top_n_topics = 50)
+    topic_model.visualize_barchart(top_n_topics=50)
     return
 
 
@@ -1312,16 +1413,16 @@ def _(mo):
 
 
 @app.cell
-def _(df, topic_model):
-    def show_topic_examples(topic_id: int, n: int = 3) -> None:
-        print("Mots-clés :", [word for word, _ in topic_model.get_topic(topic_id)])
-        examples = df.loc[df["topic"] == topic_id, "text"].head(n)
-        for text in examples:
-            print("-", text)
-
-
-    show_topic_examples(2)
-    show_topic_examples(5)
+def _():
+    # def show_topic_examples(topic_id: int, n: int = 3) -> None:
+    #    print("Mots-clés :", [word for word, _ in topic_model.get_topic(topic_id)])
+    #    examples = df.loc[df["topic"] == topic_id, "text"].head(n)
+    #    for text in examples:
+    #        print("-", text)
+    #
+    #
+    # show_topic_examples(2)
+    # show_topic_examples(5)
     return
 
 
@@ -1331,8 +1432,14 @@ def _(df):
 
     rapport = """Lors de la routine de maintenance, une dégradation du câblage a été détectée au niveau d'une section située dans le parc photovoltaïque. L'observation a révélé un rongement et une usure progressive du câblage, ce qui pourrait compromettre la sécurité et la performance du système. L'alerte a été remontée au système de supervision qui a signalé une anomalie sur cette zone spécifique en fin de matinée. En réponse, une équipe de maintenance a été dépêchée sur site dans l'après-midi pour évaluer la situation. Après inspection, il a été décidé de procéder au remplacement de la section dégradée afin d'éviter toute défaillance future. La réparation a été effectuée dans la journée, permettant de restaurer la conformité et la sécurité de l'installation."""
 
-    matches = df["text"].fillna("").map(
-        lambda text: SequenceMatcher(None, rapport.casefold(), text.casefold()).ratio()
+    matches = (
+        df["text"]
+        .fillna("")
+        .map(
+            lambda text: SequenceMatcher(
+                None, rapport.casefold(), text.casefold()
+            ).ratio()
+        )
     )
     _match_idx = matches.idxmax()
 
@@ -1385,7 +1492,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
- 
+
     """)
     return
 
@@ -1415,7 +1522,8 @@ def _(asset_type, df, pd, topic_model):
     }
     _selected_data = df.loc[df["asset_type"] == asset_type]
     _assigned_topic_ids = {
-        int(_topic_id) for _topic_id in _selected_data["topic"].dropna().unique()
+        int(_topic_id)
+        for _topic_id in _selected_data["topic"].dropna().unique()
     }
 
     if _assigned_topic_ids != set(_topic_info_by_id):
@@ -1426,33 +1534,43 @@ def _(asset_type, df, pd, topic_model):
 
     _noise_name = "Non classés / bruit"
     cluster_harness = []
-    for _topic_id in sorted(_topic_info_by_id, key=lambda _id: (_id == -1, _id)):
+    for _topic_id in sorted(
+        _topic_info_by_id, key=lambda _id: (_id == -1, _id)
+    ):
         _topic_row = _topic_info_by_id[_topic_id]
         _texts = _selected_data.loc[
             _selected_data["topic"] == _topic_id, "text"
         ].tolist()
         if any(not isinstance(_text, str) for _text in _texts):
-            raise ValueError(f"Un texte du topic {_topic_id} n'est pas une chaîne.")
+            raise ValueError(
+                f"Un texte du topic {_topic_id} n'est pas une chaîne."
+            )
         if len(_texts) != int(_topic_row.Count):
             raise ValueError(
                 f"Le topic {_topic_id} contient {len(_texts)} textes dans df, "
                 f"mais BERTopic en indique {_topic_row.Count}."
             )
 
-        cluster_harness.append({
-            "topic_id": _topic_id,
-            "old_name": _noise_name if _topic_id == -1 else str(_topic_row.Name),
-            "texts": _texts,
-        })
+        cluster_harness.append(
+            {
+                "topic_id": _topic_id,
+                "old_name": _noise_name
+                if _topic_id == -1
+                else str(_topic_row.Name),
+                "texts": _texts,
+            }
+        )
 
-    cluster_harness_summary = pd.DataFrame([
-        {
-            "topic_id": _cluster["topic_id"],
-            "old_name": _cluster["old_name"],
-            "number_of_texts": len(_cluster["texts"]),
-        }
-        for _cluster in cluster_harness
-    ])
+    cluster_harness_summary = pd.DataFrame(
+        [
+            {
+                "topic_id": _cluster["topic_id"],
+                "old_name": _cluster["old_name"],
+                "number_of_texts": len(_cluster["texts"]),
+            }
+            for _cluster in cluster_harness
+        ]
+    )
     cluster_harness_summary
     return (cluster_harness,)
 
@@ -1515,14 +1633,20 @@ def _(
         report_chat_cost(_response, "nommage des clusters")
         _content = _response.choices[0].message.content
         if not _content:
-            raise ValueError("Azure a renvoyé une réponse vide pour le renommage.")
+            raise ValueError(
+                "Azure a renvoyé une réponse vide pour le renommage."
+            )
 
         _result = json.loads(_content)
         if not isinstance(_result, dict) or set(_result) != {"clusters"}:
-            raise ValueError("La réponse Azure doit contenir uniquement la clé 'clusters'.")
+            raise ValueError(
+                "La réponse Azure doit contenir uniquement la clé 'clusters'."
+            )
         _returned_clusters = _result["clusters"]
         if not isinstance(_returned_clusters, list):
-            raise ValueError("La clé 'clusters' de la réponse Azure doit être une liste.")
+            raise ValueError(
+                "La clé 'clusters' de la réponse Azure doit être une liste."
+            )
 
         _expected_by_id = {
             _cluster["topic_id"]: _cluster for _cluster in cluster_harness
@@ -1530,14 +1654,22 @@ def _(
         _returned_by_id = {}
         for _cluster in _returned_clusters:
             if not isinstance(_cluster, dict):
-                raise ValueError("Chaque renommage Azure doit être un objet JSON.")
+                raise ValueError(
+                    "Chaque renommage Azure doit être un objet JSON."
+                )
             _topic_id = _cluster.get("topic_id")
             if not isinstance(_topic_id, int) or isinstance(_topic_id, bool):
-                raise ValueError("Chaque renommage Azure doit avoir un topic_id entier.")
+                raise ValueError(
+                    "Chaque renommage Azure doit avoir un topic_id entier."
+                )
             if _topic_id in _returned_by_id:
-                raise ValueError(f"Azure a renvoyé plusieurs noms pour le topic {_topic_id}.")
+                raise ValueError(
+                    f"Azure a renvoyé plusieurs noms pour le topic {_topic_id}."
+                )
             if _topic_id not in _expected_by_id:
-                raise ValueError(f"Azure a renvoyé un topic inconnu : {_topic_id}.")
+                raise ValueError(
+                    f"Azure a renvoyé un topic inconnu : {_topic_id}."
+                )
             _expected = _expected_by_id[_topic_id]
             if _cluster.get("old_name") != _expected["old_name"]:
                 raise ValueError(
@@ -1545,7 +1677,9 @@ def _(
                 )
             _new_name = _cluster.get("new_name")
             if not isinstance(_new_name, str) or not _new_name.strip():
-                raise ValueError(f"Le nouveau nom du topic {_topic_id} est vide ou invalide.")
+                raise ValueError(
+                    f"Le nouveau nom du topic {_topic_id} est vide ou invalide."
+                )
             # if _topic_id == -1 and _new_name != _expected["old_name"]:
             #     raise ValueError("Le topic -1 doit conserver le nom « Non classés / bruit ».")
             _returned_by_id[_topic_id] = {
@@ -1560,7 +1694,9 @@ def _(
 
         if set(_returned_by_id) != set(_expected_by_id):
             _missing_ids = sorted(set(_expected_by_id) - set(_returned_by_id))
-            raise ValueError(f"Azure n'a pas renvoyé de nom pour les topics {_missing_ids}.")
+            raise ValueError(
+                f"Azure n'a pas renvoyé de nom pour les topics {_missing_ids}."
+            )
 
         _new_names = [
             _cluster["new_name"].casefold()
@@ -1568,11 +1704,16 @@ def _(
             if _topic_id != -1
         ]
         if len(_new_names) != len(set(_new_names)):
-            raise ValueError("Azure a proposé des noms identiques pour plusieurs clusters.")
+            raise ValueError(
+                "Azure a proposé des noms identiques pour plusieurs clusters."
+            )
 
-        cluster_name_mapping = pd.DataFrame([
-            _returned_by_id[_cluster["topic_id"]] for _cluster in cluster_harness
-        ])
+        cluster_name_mapping = pd.DataFrame(
+            [
+                _returned_by_id[_cluster["topic_id"]]
+                for _cluster in cluster_harness
+            ]
+        )
 
         _topic_names = {
             _topic_id: _cluster["new_name"]
@@ -1585,11 +1726,11 @@ def _(
         _asset_mask = df["asset_type"] == asset_type
         df["cluster_name"] = pd.NA
         df["cluster_code"] = pd.NA
-        df.loc[_asset_mask, "cluster_name"] = (
-            df.loc[_asset_mask, "topic"].map(_topic_names)
+        df.loc[_asset_mask, "cluster_name"] = df.loc[_asset_mask, "topic"].map(
+            _topic_names
         )
-        df.loc[_asset_mask, "cluster_code"] = (
-            df.loc[_asset_mask, "topic"].map(_topic_codes)
+        df.loc[_asset_mask, "cluster_code"] = df.loc[_asset_mask, "topic"].map(
+            _topic_codes
         )
     cluster_name_mapping
     return
@@ -1599,7 +1740,7 @@ def _(
 def _(asset_type, df):
     from pathlib import Path
 
-    output_path = Path("../data") / f"incidents_clusterised_{asset_type}.csv"
+    output_path = Path("data") / f"incidents_clusterised_{asset_type}.csv"
     df.loc[df["asset_type"] == asset_type].to_csv(output_path, index=False)
 
     print(f"Fichier enregistré : {output_path}")
