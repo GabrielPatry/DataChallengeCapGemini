@@ -36,6 +36,10 @@ def main() -> None:
         add_preprocessing_arguments,
         run_preprocessing,
     )
+    from datachallengecapgemini.report_factory import (
+        add_report_arguments,
+        run_reporting,
+    )
 
     parser = argparse.ArgumentParser(
         description="The CLI entry point for the whole pipeline, from preprocessing to report generation"
@@ -53,6 +57,9 @@ def main() -> None:
     add_plotting_arguments(
         parser
     )  # adding plotting specific arguments to the pipeline parser
+    add_report_arguments(
+        parser
+    )  # adding report generation specific arguments to the pipeline parser
 
     args = parser.parse_args()
 
@@ -81,3 +88,15 @@ def main() -> None:
     print("Plotting: generating separate solar and wind plots")
     print("=" * 60)
     run_plotting(args.solar_csv, args.wind_csv, args.plots_output_dir)
+
+    print()
+    print("=" * 60)
+    print("Reporting: filling solar and wind markdown templates")
+    print("=" * 60)
+    run_reporting(
+        args.solar_csv,
+        args.wind_csv,
+        args.plots_output_dir,
+        args.templates_dir,
+        args.reports_output_dir,
+    )

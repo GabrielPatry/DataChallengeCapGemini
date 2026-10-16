@@ -239,7 +239,8 @@ class PlotFactory:
         counts = (
             self.df.groupby(["severity", "asset_type"])
             .size()
-            .reset_index(name="incident_count")
+            .to_frame("incident_count")
+            .reset_index()
         )
         fig = px.bar(
             counts,
@@ -308,7 +309,8 @@ class PlotFactory:
         counts = (
             df_plot.groupby(["month", "asset_type"])
             .size()
-            .reset_index(name="incident_count")
+            .to_frame("incident_count")
+            .reset_index()
         )
         fig = px.line(
             counts,
