@@ -124,7 +124,7 @@ def _(mo):
 def _():
     import pandas as pd
 
-    df : pd.DataFrame = pd.read_csv("../data/incidents_students.csv")
+    df : pd.DataFrame = pd.read_csv("data/incidents_students.csv")
     print(df["document_format"].value_counts())
 
     df : pd.DataFrame = df[df["document_format"] == "text"].reset_index(drop=True)

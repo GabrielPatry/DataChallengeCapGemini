@@ -2,6 +2,7 @@
 
 import argparse
 
+from datachallengecapgemini.plot_factory import PlotFactory
 from datachallengecapgemini.preprocessing import (
     ocr_directory,
     ocr_pdf,
@@ -10,6 +11,7 @@ from datachallengecapgemini.preprocessing import (
 )
 
 __all__ = [
+    "PlotFactory",
     "ocr_directory",
     "ocr_pdf",
     "parse_ocr_directory",
@@ -19,6 +21,10 @@ __all__ = [
 
 def main() -> None:
     """CLI entry point — ``uv run datachallengecapgemini``."""
+    from datachallengecapgemini.plot_factory import (
+        add_plotting_arguments,
+        run_plotting,
+    )
     from datachallengecapgemini.preprocessing import (
         PreprocessingArgs,
         add_preprocessing_arguments,
@@ -38,6 +44,9 @@ def main() -> None:
     add_preprocessing_arguments(
         parser
     )  # adding preprocessing specific aguments to the preprocessing specific parser
+    add_plotting_arguments(
+        parser
+    )  # adding plotting specific arguments to the pipeline parser
 
     args = parser.parse_args()
 
@@ -59,3 +68,9 @@ def main() -> None:
         print(
             f"Skipping preprocessing, assuming the merged csv is in {args.output_merged_csv}..."
         )
+
+    print()
+    print("=" * 60)
+    print("Plotting: generating plots from the merged CSV")
+    print("=" * 60)
+    run_plotting(args.output_merged_csv, args.plots_output_dir)
