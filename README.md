@@ -141,10 +141,26 @@ The starter kit only uses the `text` subset (~600 reports) to get you started qu
 The full pipeline can be runned using:
 
 ```bash
-uv run datachallengecapgemini
+uv run dc
 ```
 
-Note that by default, running this skip the preprocessing, and expect a csv file with incident descriptions at the directory specified after the `--output-merged-csv` flag, which is `data/incidents_students_merged.csv` by default. As the preprocesing run locally and can be very long, we recommand asking a team-mate having a good computer to compute the final csv file, then use it directly.
+`dc` is a short alias for the `datachallengecapgemini` command.
+
+By default, plotting skips preprocessing and reads the pre-existing
+`data/incidents_clusterised_solar.csv` and
+`data/incidents_clusterised_wind.csv` files. Override their locations with
+`--solar-csv` and `--wind-csv`. Solar and wind plots are written separately
+under `data/plots/solar` and `data/plots/wind`.
+
+The pipeline ends with a report-generation step: it fills the markdown
+templates in `templates/` (`solar_report.md`, `wind_report.md`) with
+statistics computed from the clusterised CSVs, the figures from
+`data/plots/<label>/png`, and placeholder prose, then writes the filled
+reports to `filled_templates/solar/report.md` and
+`filled_templates/wind/report.md`. Templates use `{{ variable_name }}`
+placeholders, including `{{ figure_<plot_name> }}` for figures. Override the
+template and output locations with `--templates-dir` and
+`--reports-output-dir`.
 
 You can also start the preprocessing only using:
 

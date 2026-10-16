@@ -21,6 +21,9 @@ __marimo__
 # data
 data
 
+# generated reports
+filled_templates/
+
 # mistral
 .vibe
 

@@ -2,7 +2,11 @@
 
 import argparse
 
-from datachallengecapgemini.plot_factory import PlotFactory
+from datachallengecapgemini.plot_factory import (
+    PlotFactory,
+    SolarPlotFactory,
+    WindPlotFactory,
+)
 from datachallengecapgemini.preprocessing import (
     ocr_directory,
     ocr_pdf,
@@ -12,6 +16,8 @@ from datachallengecapgemini.preprocessing import (
 
 __all__ = [
     "PlotFactory",
+    "SolarPlotFactory",
+    "WindPlotFactory",
     "ocr_directory",
     "ocr_pdf",
     "parse_ocr_directory",
@@ -21,6 +27,10 @@ __all__ = [
 
 def main() -> None:
     """CLI entry point — ``uv run datachallengecapgemini``."""
+    from datachallengecapgemini.pdf_export import (
+        add_pdf_arguments,
+        run_pdf_export,
+    )
     from datachallengecapgemini.plot_factory import (
         add_plotting_arguments,
         run_plotting,
@@ -29,6 +39,10 @@ def main() -> None:
         PreprocessingArgs,
         add_preprocessing_arguments,
         run_preprocessing,
+    )
+    from datachallengecapgemini.report_factory import (
+        add_report_arguments,
+        run_reporting,
     )
 
     parser = argparse.ArgumentParser(
@@ -47,6 +61,12 @@ def main() -> None:
     add_plotting_arguments(
         parser
     )  # adding plotting specific arguments to the pipeline parser
+    add_report_arguments(
+        parser
+    )  # adding report generation specific arguments to the pipeline parser
+    add_pdf_arguments(
+        parser
+    )  # adding PDF export specific arguments to the pipeline parser
 
     args = parser.parse_args()
 
@@ -66,11 +86,33 @@ def main() -> None:
 
     else:
         print(
-            f"Skipping preprocessing, assuming the merged csv is in {args.output_merged_csv}..."
+            "Skipping preprocessing, assuming the clusterised solar and wind "
+            f"CSVs already exist at {args.solar_csv} and {args.wind_csv}..."
         )
 
     print()
     print("=" * 60)
-    print("Plotting: generating plots from the merged CSV")
+    print("Plotting: generating separate solar and wind plots")
     print("=" * 60)
-    run_plotting(args.output_merged_csv, args.plots_output_dir)
+    run_plotting(args.solar_csv, args.wind_csv, args.plots_output_dir)
+
+    print()
+    print("=" * 60)
+    print("Reporting: filling solar and wind markdown templates")
+    print("=" * 60)
+    run_reporting(
+        args.solar_csv,
+        args.wind_csv,
+        args.plots_output_dir,
+        args.templates_dir,
+        args.reports_output_dir,
+    )
+
+    if args.skip_pdf:
+        print("Skipping PDF export (--skip-pdf)...")
+    else:
+        print()
+        print("=" * 60)
+        print("PDF export: converting markdown reports to PDF with pandoc")
+        print("=" * 60)
+        run_pdf_export(args.reports_output_dir)
