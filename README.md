@@ -74,6 +74,36 @@ Preprocessing does not start the server or download the model. It stops with
 an error if `SURYA_INFERENCE_URL` is missing, or if the configured server is
 unavailable or serving a different model.
 
+The final pipeline step converts the markdown reports to PDF with
+[pandoc](https://pandoc.org/). For the latest release, use the installer for
+your platform from the [pandoc GitHub releases](https://github.com/jgm/pandoc/releases/latest)
+(for example, the `.msi` on Windows, `.pkg` on macOS, or `.deb` on Debian/Ubuntu).
+See Pandoc's [installation guide](https://pandoc.org/installing.html) for other
+platforms and installation options. Make sure the `pandoc` command is on your
+`PATH`.
+
+PDF export also requires `xelatex`, the PDF engine used by this project. It is
+available in [TeX Live](https://www.tug.org/texlive/) and other TeX
+distributions; choose the installation for your operating system:
+
+- **Debian/Ubuntu:** install XeLaTeX and commonly needed LaTeX packages:
+  `sudo apt install texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended`.
+- **macOS:** install [MacTeX](https://tug.org/mactex/) for the more complete
+  setup. [BasicTeX](https://tug.org/mactex/morepackages.html) is a smaller
+  alternative, but may need additional TeX packages installed with `tlmgr`.
+- **Windows:** install [MiKTeX](https://miktex.org/download) and allow it to
+  install missing packages when prompted.
+
+Check that both commands are available before running the pipeline:
+
+```bash
+pandoc --version
+xelatex --version
+```
+
+Without pandoc, the pipeline stops with an error at the last step; you can
+skip that step with `uv run dc --skip-pdf`.
+
 ## Setup
 
 ### 1. Clone and enter the project
@@ -161,6 +191,12 @@ reports to `filled_templates/solar/report.md` and
 placeholders, including `{{ figure_<plot_name> }}` for figures. Override the
 template and output locations with `--templates-dir` and
 `--reports-output-dir`.
+
+As a final step, each filled markdown report is converted to PDF with
+pandoc, producing `filled_templates/solar/report.pdf` and
+`filled_templates/wind/report.pdf` next to the markdown files. This step
+requires `pandoc` and a PDF engine (see [Prerequisites](#prerequisites));
+skip it with `--skip-pdf`.
 
 You can also start the preprocessing only using:
 
