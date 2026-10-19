@@ -13,11 +13,19 @@ from datachallengecapgemini.preprocessing import (
     parse_ocr_directory,
     parse_ocr_json,
 )
+from datachallengecapgemini.report_factory import (
+    ReportFactory,
+    SolarReportFactory,
+    WindReportFactory,
+)
 
 __all__ = [
     "PlotFactory",
+    "ReportFactory",
     "SolarPlotFactory",
+    "SolarReportFactory",
     "WindPlotFactory",
+    "WindReportFactory",
     "ocr_directory",
     "ocr_pdf",
     "parse_ocr_directory",
@@ -106,6 +114,7 @@ def main() -> None:
         args.plots_output_dir,
         args.templates_dir,
         args.reports_output_dir,
+        use_llm=args.use_llm,
     )
 
     if args.skip_pdf:
