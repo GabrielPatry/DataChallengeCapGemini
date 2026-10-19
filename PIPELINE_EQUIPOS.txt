@@ -1,0 +1,480 @@
+================================================================================
+ PIPELINE DE INFORMES POR EQUIPO  (rama juan/equipment-analysis)
+ Data Challenge Capgemini x Mines Paris 2026 - incidentes PV
+================================================================================
+
+Contenido
+  1. Objetivo
+  2. Vista general del pipeline
+  3. Paso a paso
+       3.1 Seleccion de equipos criticos
+       3.2 Estadisticas + facts           (equipment_stats.py)
+       3.3 Graficas + JSON                (plot_factory.py)
+       3.4 Un agente Azure por seccion    (report_factory.py)
+       3.5 Ensamblado del informe         (templates/equipment_report.md)
+  4. Ejemplo completo: OUEST1-INV10
+  5. Como transponer el pipeline a otros escenarios (sitio, eolico, flota...)
+  6. Estructura del repo en esta rama
+  7. Comandos utiles
+
+
+--------------------------------------------------------------------------------
+1. OBJETIVO
+--------------------------------------------------------------------------------
+
+Generar, para cada equipo critico de un sitio (un inversor PV y el campo DC
+aguas arriba), un informe markdown bien estructurado: cifras clave,
+evolucion de costes, exposicion meteorologica, modos de fallo, hipotesis de
+causa raiz, recomendaciones priorizadas y conclusion.
+
+Tres principios guian el diseno:
+
+  a) El LLM (Azure OpenAI, gpt-4.1-nano) NO calcula nada. Todas las cifras,
+     ratios, variaciones, prioridades y niveles de riesgo se calculan en
+     Python y se inyectan en el prompt. El modelo solo redacta.
+  b) Cada seccion del informe tiene su propio agente especializado (rol,
+     preguntas y datos propios). Un agente solo ve los datos de su seccion.
+  c) Cada figura viene acompanada del JSON con los datos que dibuja: el
+     agente que comenta una grafica recibe exactamente lo que el lector ve.
+
+
+--------------------------------------------------------------------------------
+2. VISTA GENERAL DEL PIPELINE
+--------------------------------------------------------------------------------
+
+  incidents_clusterised_solar.csv   (1 fila = 1 incidente, con su cluster =
+            |                        "modo de fallo")
+            v
+  +--------------------------------------------------------------+
+  | [1] SELECCION          equipment_stats.compute_criticality   |
+  |     score 0-100 vs sitio y vs flota -> equipos P1 / P2       |
+  +--------------------------------------------------------------+
+            |   para cada equipo critico del sitio
+            v
+  +--------------------------------------------------------------+
+  | [2] ESTADISTICAS       equipment_stats.build_equipment_stats |
+  |     numeracion local #1..#n, cifras, tendencias, prioridades |
+  |     + "facts": frases ya redactadas y verificadas            |
+  +--------------------------------------------------------------+
+            |
+            v
+  +--------------------------------------------------------------+
+  | [3] GRAFICAS + JSON    plot_factory.EquipmentPlotFactory     |
+  |     plot_cost_timeline   -> figures/cost_timeline.png        |
+  |                             json/cost_timeline.json          |
+  |     plot_downtime_weather-> figures/downtime_weather.png     |
+  |                             json/downtime_weather.json       |
+  |     plot_cluster_weather -> figures/cluster_weather.png      |
+  |                             json/cluster_weather.json        |
+  |     + json/stats.json  (todas las estadisticas del paso 2)   |
+  +--------------------------------------------------------------+
+            |   report_factory solo lee json/ (no el CSV)
+            v
+  +--------------------------------------------------------------+
+  | [4] AGENTES POR SECCION   report_factory.section_*           |
+  |                                                              |
+  |   key_figures ----> agente "benchmarking"         --+        |
+  |   methodology ----> (texto fijo, sin agente)        |        |
+  |   cost_timeline --> agente "costes y recurrencia"   |        |
+  |   weather --------> agente "exposicion meteo"       |        |
+  |   failure_modes --> agente "analisis de fallos PV"  |  cada  |
+  |   root_causes ----> agente "RCA"  ------+           |  uno   |
+  |   recommendations > agente "planificador O&M" <-----+  guarda|
+  |   conclusion -----> agente "responsable fiabilidad" |  su .md|
+  |   summary --------> agente "resumen ejecutivo"      |        |
+  |   incident_register (tabla fija, sin agente)      --+        |
+  |                                                              |
+  |   Cada respuesta se verifica en Python y, si hay problemas,  |
+  |   el agente recibe una ronda de correccion.                  |
+  +--------------------------------------------------------------+
+            |   sections/<seccion>.md
+            v
+  +--------------------------------------------------------------+
+  | [5] ENSAMBLADO   templates/equipment_report.md -> report.md  |
+  |     (opcional: --pdf con pandoc, via pdf_export.py)          |
+  +--------------------------------------------------------------+
+
+Salida por equipo:  equipment_reports/<SITIO>/<EQUIPO>/
+    figures/   *.png                       (versionado)
+    json/      <figura>.json, stats.json   (local, ignorado por git)
+    sections/  <seccion>.md, .prompt.md,   (local, ignorado por git)
+               .llm.json, checks.txt
+    report.md                              (versionado)
+y por sitio:   equipment_reports/<SITIO>/criticality.csv (versionado)
+
+
+--------------------------------------------------------------------------------
+3. PASO A PASO
+--------------------------------------------------------------------------------
+
+3.1 Seleccion de equipos criticos  (equipment_stats.compute_criticality)
+-------------------------------------------------------------------------
+Para cada equipo se calculan 4 indicadores sobre TODOS sus incidentes:
+numero de incidentes (peso 1), incidentes severos (peso 2), coste total
+(peso 1) y horas de parada (peso 1).
+
+Cada indicador se convierte en un z-score robusto "leave-one-out" (mediana
+y MAD de los OTROS equipos, recortado a +/-3). La media ponderada se pasa a
+0-100 con la funcion de distribucion normal: 50 = equipo tipico, >= 75 =
+claramente por encima del resto.
+
+El score se calcula dos veces:
+  - score_site  : contra los demas equipos del mismo sitio
+  - score_fleet : contra todos los equipos solares de la flota
+
+Criterio (el "criterio 2" que elegimos):
+  critico si score_site >= 75  O  score_fleet >= 75
+  P1 si se cumplen ambos, P2 si solo uno.
+
+Nivel de riesgo (deterministico): P1 -> critical, P2 -> high; si no,
+medium cuando max(score) >= 50, low en otro caso.
+
+
+3.2 Estadisticas + facts  (equipment_stats.build_equipment_stats)
+-------------------------------------------------------------------
+Solo los incidentes moderados y severos entran en el analisis detallado.
+Se numeran #1, #2, ... en orden cronologico POR EQUIPO (el incident_id
+global nunca llega al informe; la correspondencia #k -> incident_id queda
+en stats.json, en "incident_mapping").
+
+stats.json contiene, entre otros bloques:
+  equipment                   prioridad, riesgo, scores, por que se selecciono
+  comparison_with_site_median equipo vs equipo mediano del sitio (+ ratio)
+  key_figures                 totales, medias, % de coste de los severos
+  yearly_trend / seasonality  cifras por ano (con variacion ya calculada)
+                              y por estacion
+  most_costly_incidents       top 3 con su % del coste
+  close_sequences_within_30_days  incidentes encadenados a < 30 dias
+  failure_modes               por modo de fallo: incidentes #k, coste, %,
+                              recurrencias < 90 dias, meteo, prioridad
+  register                    registro de incidentes (anexo)
+  facts                       frases ya redactadas, por tema:
+                              benchmark / cost / trend / weather / priorities
+
+Los "facts" existen porque el modelo pequeno confundia cifras (por ejemplo
+"incidente mas caro" con "modo de fallo mas caro", o el ratio de los
+severos con el de todos los incidentes). Ahora recibe la frase exacta.
+
+Prioridad de un modo de fallo (y de toda recomendacion que lo ataque):
+  P1 (1 mes)   : >= 1 incidente severo Y (>= 20 % del coste
+                 O una recurrencia en < 90 dias)
+  P2 (6 meses) : >= 1 incidente severo O >= 10 % del coste
+  P3 (plan anual): el resto
+
+
+3.3 Graficas + JSON  (plot_factory.EquipmentPlotFactory)
+---------------------------------------------------------
+Cada metodo plot_* devuelve un EquipmentPlot(figure, data): la figura
+matplotlib Y el diccionario con los datos que dibuja. Asi la grafica y el
+JSON que recibe el agente salen del mismo calculo y no pueden divergir.
+Para anadir una figura basta con anadir un metodo plot_*.
+
+  plot_cost_timeline     coste de cada incidente en el tiempo
+                         color = familia de modo de fallo, forma = modo,
+                         relleno = severo, hueco = moderado, top 3 etiquetado
+  plot_downtime_weather  horas de parada por incidente y condicion meteo
+                         (trazo negro = mediana)
+  plot_cluster_weather   heatmap: n incidentes por modo de fallo x meteo
+
+Las figuras son PNG de matplotlib (no plotly) para no depender de
+kaleido/Chrome. run_equipment_plotting escribe figures/, json/ y
+json/stats.json para cada equipo.
+
+
+3.4 Un agente Azure por seccion  (report_factory.py)
+-----------------------------------------------------
+Todas las secciones pasan por SectionContext.ask(), que construye:
+
+  SYSTEM  = "You are <rol del agente>" + SHARED_RULES
+            (reglas comunes: no calcular, copiar las cifras de "facts",
+             citar solo #k existentes y del modo de fallo correcto, no
+             generalizar la meteo entre modos de fallo, marcar muestras
+             < 3 como "indicative", no cambiar prioridades, no mencionar
+             datasets / clustering / IA)
+  USER    = 'You are writing the section "<titulo>" of the report of
+             <equipo> (site ...)' + preguntas numeradas + JSON con SOLO
+             los datos de esa seccion
+  SALIDA  = JSON con esquema estricto (json_schema), un campo por pregunta
+
+Despues de cada respuesta, Python verifica:
+  - numeros que no aparecen en los datos de entrada  (cifra inventada)
+  - #k que no existen o no pertenecen al modo de fallo citado
+  - controles propios de la seccion (p. ej. un modo P1 sin accion)
+Si hay problemas, se reenvia el prompt con la lista de problemas (una
+ronda de correccion). Lo que quede se escribe en sections/checks.txt.
+
+Cache: la respuesta se guarda en sections/<seccion>.llm.json con el hash
+del prompt. Solo se vuelve a llamar a Azure si el prompt cambia o con
+--force <seccion>.
+
+Orden de generacion (no es el orden del informe):
+  key_figures -> methodology -> cost_timeline -> weather -> failure_modes
+  -> root_causes -> recommendations -> conclusion -> summary
+  -> incident_register
+
+Encadenamiento: recommendations recibe las hipotesis de root_causes;
+conclusion y summary reciben las acciones ya priorizadas. Por eso el
+resumen ejecutivo se escribe al final aunque aparezca al principio.
+
+Que decide Python y que redacta el agente:
+  Python : todas las tablas, prioridades, nivel de riesgo, confianza de
+           cada causa raiz (alta >= 5 incidentes de apoyo, media >= 3,
+           baja < 3), orden de las recomendaciones, metodologia, anexo.
+  Agente : los parrafos de analisis, el mecanismo de cada modo de fallo,
+           las hipotesis, las acciones concretas, el titulo y el resumen.
+
+
+3.5 Ensamblado
+--------------
+templates/equipment_report.md solo contiene marcadores {{ section_<x> }}.
+fill_template (la misma funcion que usa el pipeline de flota de los
+companeros) sustituye cada marcador por el .md de la seccion y corrige las
+rutas de las imagenes (../figures/ -> figures/).
+
+
+--------------------------------------------------------------------------------
+4. EJEMPLO COMPLETO: OUEST1-INV10   (cifras reales del informe generado)
+--------------------------------------------------------------------------------
+
+Comando:   uv run dc-equipment --site OUEST1
+
+[1] Seleccion
+    OUEST1 tiene 10 equipos; 6 son criticos (INV06, INV03 = P1;
+    INV10, INV08, INV04, INV02 = P2).
+    INV10: score vs sitio 64.3 (< 75), score vs flota 86.2 (>= 75)
+           -> P2, riesgo "high". Rango 3 de 10 en su sitio.
+
+[2] Estadisticas
+    29 incidentes en total; 15 moderados/severos -> numerados #1..#15
+    (9 moderados, 6 severos), 206 762 EUR, 414 h de parada.
+    Facts generados (extracto):
+      "Severe incidents: 6 on this equipment vs 4.5 for the median
+       equipment of the site (ratio x1.33, ABOVE the site median)."
+      "The most costly single incident is #3 (Degradation et
+       court-circuit cablage, severe, 2023-11-21): 49 142 EUR, 23.8% ..."
+      "The most costly failure mode is Incendie batiment support PV:
+       51 131 EUR over 2 incident(s), 24.7% of the cost."
+      "2025: 4 incident(s) (0 severe), 19 821 EUR (-79.5% vs previous
+       year)."
+    Prioridades: Incendie batiment support PV -> P1 (2 severos + 24.7 %
+    del coste + 1 recurrencia < 90 d); Defaillance chaine et boitier de
+    jonction -> P2; Dommages superficiels modules PV -> P3; ...
+
+[3] Graficas + JSON
+    figures/cost_timeline.png  +  json/cost_timeline.json, donde cada punto
+    es, por ejemplo:
+      {"ref": "#3", "date": "2023-11-21", "severity": "severe",
+       "failure_mode": "Degradation et court-circuit cablage",
+       "cost_eur": 49142, "downtime_h": 82.4,
+       "weather_condition": "temps calme",
+       "days_since_previous_incident": 187, ...}
+    y "labelled_incidents": ["#3", "#10", "#4"] (los 3 etiquetados en la
+    figura).
+
+[4] Agente de la seccion "3. Cost timeline"
+    SYSTEM: "You are a reliability engineer who analyses the cost history
+             and recurrence of incidents on PV inverters." + SHARED_RULES
+    USER  : 4 preguntas
+              1. evolucion anual (comentar cada ano, tambien el ultimo)
+              2. que incidentes dominan el coste
+              3. secuencias cercanas / recurrencias
+              4. estacionalidad
+            + JSON: cost_timeline.json, yearly_trend, seasonality,
+              most_costly_incidents, close_sequences, facts de tendencia
+              y coste  (unos 3 800 tokens de entrada, 250 de salida)
+    RESPUESTA (extracto de sections/cost_timeline.llm.json):
+      "dominant_incidents": "The most costly incident was #3, involving
+       degradation and short-circuiting of wiring, accounting for nearly
+       a quarter of the total incident costs. The failure mode that
+       dominates costs is incendie batiment support PV ..."
+    Verificacion Python: ninguna cifra inventada, ningun #k erroneo
+    -> sections/checks.txt vacio.
+    -> sections/cost_timeline.md = titulo + figura + tabla anual (Python)
+       + 4 parrafos del agente.
+
+    En la v2 (un solo prompt para todo el informe) el modelo atribuia el
+    incendio al incidente mas caro y olvidaba la caida de 2025; con los
+    facts y el agente dedicado ambos errores desaparecen.
+
+[5] Ensamblado
+    equipment_reports/OUEST1/OUEST1-INV10/report.md
+    = summary + key_figures + methodology + cost_timeline + weather +
+      failure_modes + root_causes + recommendations + conclusion + anexo.
+    Coste de los 6 informes de OUEST1: unos 0,02 USD (~116 000 tokens de
+    entrada y ~13 500 de salida con gpt-4.1-nano, 8 agentes por equipo +
+    rondas de correccion; el total se imprime al final de cada ejecucion).
+
+
+--------------------------------------------------------------------------------
+5. COMO TRANSPONER EL PIPELINE A OTROS ESCENARIOS
+--------------------------------------------------------------------------------
+
+El pipeline no depende de que la unidad sea un "equipo". Lo que hay que
+definir en cada escenario son cinco cosas:
+
+  (1) la UNIDAD de analisis        equipo, sitio, tecnologia, tecnico...
+  (2) sus PARES de comparacion      con que se compara (mediana de que)
+  (3) las ESTADISTICAS + facts      que cifras necesita cada seccion
+  (4) las FIGURAS + su JSON         que se dibuja y con que datos
+  (5) las SECCIONES                 rol, preguntas, datos, esquema, checks
+
+Lo que se reutiliza tal cual (report_factory.py):
+  get_azure_client, call_azure (json_schema estricto, reintentos 429),
+  SectionContext.ask (prompt, cache por hash, verificacion de cifras y
+  de #k, ronda de correccion), _md_table, fill_template, pdf_export.
+
+Lo que hay que generalizar antes:
+  SHARED_RULES menciona "PV inverter and the DC field": convertir esa
+  primera frase en un parametro (descripcion de la unidad y del lector).
+
+Ejemplo A - ANALISIS POR SITIO (en lugar de por equipo)
+  (1) unidad   : un sitio, p. ej. "Centrale PV Ouest-1"
+  (2) pares    : los demas sitios de la flota (mediana por sitio), y
+                 dentro del sitio, sus equipos (para senalar los peores)
+  (3) stats    : site_stats.py (o una funcion build_site_stats) con:
+                 - comparacion sitio vs sitio mediano (ratios + facts)
+                 - ranking de equipos del sitio = criticality.csv, que ya
+                   existe (compute_criticality filtrado por sitio)
+                 - modos de fallo del sitio y en cuantos equipos aparecen
+                   ("problema sistemico" si aparece en muchos equipos,
+                    "problema local" si se concentra en uno)
+                 - tendencia anual, estacionalidad, meteo del sitio
+                 - numeracion #k por sitio
+  (4) figuras  : SitePlotFactory con metodos plot_* que devuelvan
+                 (figura, data), p. ej.
+                 - coste total por equipo del sitio (barras)
+                 - heatmap equipo x modo de fallo
+                 - linea de tiempo de costes del sitio por modo de fallo
+                 - parada vs meteo del sitio
+  (5) secciones: section_site_key_figures, section_equipment_ranking
+                 (agente: "que equipos concentran el riesgo"),
+                 section_systemic_vs_local (agente RCA a nivel de sitio),
+                 section_site_weather, section_site_recommendations
+                 (acciones de sitio: contrato O&M, campanas de
+                  termografia en todo el sitio, repuestos...), conclusion,
+                 summary. Las secciones de metodologia y anexo siguen
+                 siendo texto fijo.
+       + templates/site_report.md con marcadores {{ section_<x> }}
+       + un comando dc-site --site OUEST1 calcado de main_equipment.
+  Encadenamiento natural: el informe de sitio puede recibir, como datos
+  de una seccion, los resumenes ya generados de sus equipos criticos
+  (sections/summary.llm.json de cada equipo), sin recalcular nada.
+
+Ejemplo B - EOLICO
+  Requiere primero un CSV eolico clusterizado (hoy solo el solar lo esta).
+  Cambian: el rol de los agentes (aerogenerador en vez de inversor PV),
+  FAILURE_MODE_FAMILIES (colores/formas de los modos de fallo eolicos),
+  el orden de las condiciones meteo y las acciones de ejemplo en las
+  preguntas de recomendaciones (inspeccion de palas, multiplicadora,
+  vibraciones...). Estadisticas, verificaciones y ensamblado no cambian.
+
+Ejemplo C - FLOTA, TECNOLOGIA O TECNICO
+  Misma receta: la unidad es la flota entera (pares = sitios), un modo de
+  fallo (pares = otros modos de fallo) o un tecnico (pares = otros
+  tecnicos, cuidado con la lectura: mide carga de trabajo, no culpa).
+
+Regla de oro al transponer: si una cifra aparece en el informe, debe
+salir de Python (stats o JSON de figura). Si el agente necesita una
+comparacion, se le da ya calculada, idealmente como frase en "facts".
+
+
+--------------------------------------------------------------------------------
+6. ESTRUCTURA DEL REPO EN ESTA RAMA
+--------------------------------------------------------------------------------
+
+Leyenda:  [EQUIPO]  pipeline por equipo (esta rama)
+          [FLOTA]   pipeline de flota de los companeros (main, sin tocar)
+          [LEGACY]  prototipo anterior, superado por src/ (se puede borrar)
+          [LOCAL]   no versionado (.gitignore), cada uno lo tiene en local
+
+DataChallengeCapGemini/
+|
+|-- README.md                    [FLOTA+EQUIPO] instalacion y uso; seccion
+|                                "Equipment-level reports" anadida
+|-- PIPELINE_EQUIPOS.txt         [EQUIPO] este documento
+|-- pyproject.toml / uv.lock     dependencias (uv); comandos dc,
+|   .python-version              dc-equipment, datachallengecapgemini-preprocess
+|-- .env.example                 plantilla de credenciales Azure
+|-- .env                         [LOCAL] credenciales reales, NUNCA commitear
+|-- .gitignore
+|
+|-- src/datachallengecapgemini/  PAQUETE PYTHON (el codigo "oficial")
+|   |-- __init__.py              main() = uv run dc            [FLOTA]
+|   |                            main_equipment() = dc-equipment [EQUIPO]
+|   |-- preprocessing.py         OCR + parsing de PDFs          [FLOTA]
+|   |-- equipment_stats.py       criticidad, numeracion #k,     [EQUIPO]
+|   |                            estadisticas y facts
+|   |-- plot_factory.py          PlotFactory (flota)            [FLOTA]
+|   |                            EquipmentPlotFactory           [EQUIPO]
+|   |-- report_factory.py        run_reporting (flota)          [FLOTA]
+|   |                            cliente Azure, SectionContext, [EQUIPO]
+|   |                            section_*, run_equipment_reporting
+|   `-- pdf_export.py            markdown -> PDF con pandoc     [FLOTA]
+|
+|-- templates/
+|   |-- solar_report.md          plantilla flota solar          [FLOTA]
+|   |-- wind_report.md           plantilla flota eolica         [FLOTA]
+|   `-- equipment_report.md      plantilla por equipo           [EQUIPO]
+|
+|-- equipment_reports/           SALIDAS del pipeline por equipo [EQUIPO]
+|   `-- OUEST1/
+|       |-- criticality.csv      scores de los 10 equipos del sitio
+|       `-- OUEST1-INV02 ... OUEST1-INV10/   (6 equipos criticos)
+|           |-- report.md        informe final
+|           |-- figures/*.png    3 figuras
+|           |-- json/            [LOCAL] datos de figuras + stats.json
+|           `-- sections/        [LOCAL] .md, prompts y respuestas Azure
+|
+|-- incidents_clusterised_solar.csv   datos solares clusterizados (copia
+|                                en la raiz; dc-equipment usa primero
+|                                data/incidents_clusterised_solar.csv si
+|                                existe, y si no esta copia)
+|-- data/                        [LOCAL] CSV de incidentes, PDFs, salidas
+|                                del pipeline de flota (data/plots)
+|-- filled_templates/            [LOCAL] informes de flota generados
+|-- embeddings_*.npy             [LOCAL] embeddings Azure
+|
+|-- notebooks/                   notebooks marimo de los companeros [FLOTA]
+|   (starterkit_students, clustering_pipeline, PerSiteAnalysis,
+|    unclustered_exploration, view_csv_data)
+|-- functional_pipeline_test/    pruebas de pipeline de los companeros
+|
+`-- site_analysis/               [LEGACY] primera version por equipo:
+    |-- equipment_data.py        scripts sueltos, 1 solo prompt para
+    |-- generate_equipment_reports(_v2).py   todo el informe (v1 y v2)
+    |-- prompts(_v2).py
+    |-- equipment_report_template(_v2).md
+    |-- equipment_criticality.csv
+    |-- reports/OUEST1-*.md      informes v1 y OUEST1-INV10-v2.md
+    `-- figures/OUEST1-*.png     (sirven para comparar con la version
+                                  actual; todo esta reemplazado por
+                                  src/ + equipment_reports/)
+
+Para desenredar (propuesta, no aplicada en esta rama):
+  - borrar site_analysis/ una vez comparadas las versiones;
+  - mover incidents_clusterised_solar.csv a data/ (convencion del equipo)
+    y dejar de versionarlo;
+  - abrir un PR juan/equipment-analysis -> main: los cambios en los
+    archivos compartidos (plot_factory, report_factory, __init__,
+    pyproject, README) son solo ADICIONES, el pipeline de flota no cambia.
+
+
+--------------------------------------------------------------------------------
+7. COMANDOS UTILES
+--------------------------------------------------------------------------------
+
+  uv sync                                     instalar / registrar comandos
+  uv run dc-equipment --site OUEST1           equipos criticos del sitio
+  uv run dc-equipment --site OUEST1 --dry-run figuras, JSON y prompts, sin
+                                              llamar a Azure
+  uv run dc-equipment --site OUEST1 --equipment OUEST1-INV10
+                                              un solo equipo
+  uv run dc-equipment --site OUEST1 --all-equipment
+                                              todos los equipos del sitio
+  uv run dc-equipment --site OUEST1 --force root_causes recommendations
+                                              regenerar solo esas secciones
+  uv run dc-equipment --site OUEST1 --language French
+  uv run dc-equipment --site OUEST1 --pdf     ademas, PDF con pandoc
+
+Requisito: .env con AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT,
+AZURE_OPENAI_API_VERSION y AZURE_OPENAI_CHAT_DEPLOYMENT (ver .env.example).
