@@ -66,6 +66,7 @@ def convert_markdown_to_pdf(markdown_path: Path, pdf_path: Path | None = None) -
     result = subprocess.run(
         [
             "pandoc",
+            "--from=markdown-implicit_figures",
             str(markdown_path),
             "--pdf-engine",
             PDF_ENGINE,
