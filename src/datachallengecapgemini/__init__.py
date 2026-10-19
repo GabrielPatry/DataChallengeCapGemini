@@ -114,7 +114,6 @@ def main() -> None:
         args.plots_output_dir,
         args.templates_dir,
         args.reports_output_dir,
-        use_llm=args.use_llm,
     )
 
     if args.skip_pdf:
