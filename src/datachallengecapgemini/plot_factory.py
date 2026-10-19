@@ -19,12 +19,31 @@ entry point:
 
 import argparse
 import inspect
+import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
+import matplotlib.dates as mdates
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+from matplotlib.ticker import FuncFormatter
+
+from datachallengecapgemini.equipment_stats import (
+    SEVERE,
+    build_equipment_stats,
+    failure_mode_weather_matrix,
+    format_eur,
+    number_incidents,
+    ordered_weather,
+    site_focus,
+    weather_table,
+)
 
 # Project root: src/datachallengecapgemini/plot_factory.py -> 3 levels up
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -416,4 +435,419 @@ def add_plotting_arguments(parser: argparse.ArgumentParser) -> None:
         type=Path,
         default=PROJECT_ROOT / "data" / "plots",
         help="Directory where plots are saved (png/ and html/ subfolders are created inside).",
+    )
+
+
+# ===========================================================================
+# Equipment-level figures — one PNG + one JSON (the plotted data) per figure
+# ===========================================================================
+#
+# The equipment reports are built per equipment of a site. Their figures are
+# static matplotlib PNGs (no kaleido/Chrome needed) and each one comes with
+# the JSON of the data it shows, which ``report_factory`` injects into the
+# prompt of the section that comments the figure.
+
+# Failure-mode families: colour = family, marker shape = failure mode inside
+# the family. Unknown failure modes (e.g. after re-clustering) fall back to a
+# grey cross.
+FAILURE_MODE_FAMILIES: dict[str, list[str]] = {
+    "Fire": [
+        "Incendie support bâtiment PV",
+        "Incendie toiture et panneaux PV",
+        "Incendie bâtiment support PV",
+        "Premiers secours incendie PV",
+    ],
+    "Junction box / connectors": [
+        "Point chaud boîtier de jonction",
+        "Défaillance chaîne et boîtier de jonction",
+        "Remplacement préventif connecteurs",
+    ],
+    "Cabling": [
+        "Anomalies d'isolement câblage",
+        "Dégradation et court-circuit câblage",
+    ],
+    "Overvoltage": ["Surtensions et protections transitoires"],
+    "Modules": ["Dommages superficiels modules PV"],
+    "Overheating": [
+        "Surchauffe panneaux PV",
+        "Limitation puissance suite surchauffe",
+    ],
+    "Soiling": [
+        "Salissure et nettoyage modules PV",
+        "Encrassement et planification nettoyage",
+    ],
+    "Inverter": ["Baisse de rendement onduleur"],
+}
+# Reference categorical palette, fixed order (CVD-validated on adjacent pairs)
+FAMILY_COLORS: dict[str, str] = dict(
+    zip(
+        FAILURE_MODE_FAMILIES,
+        [
+            "#2a78d6",
+            "#eb6834",
+            "#1baf7a",
+            "#eda100",
+            "#e87ba4",
+            "#008300",
+            "#6250d6",
+            "#e34948",
+        ],
+    )
+)
+FAMILY_MARKERS: list[str] = ["o", "s", "^", "D"]
+FAILURE_MODE_STYLE: dict[str, tuple[str, str]] = {
+    mode: (FAMILY_COLORS[family], FAMILY_MARKERS[i])
+    for family, modes in FAILURE_MODE_FAMILIES.items()
+    for i, mode in enumerate(modes)
+}
+DEFAULT_STYLE = ("#8a8984", "X")
+TEXT_SECONDARY = "#52514e"
+GRID_COLOR = "#e4e3df"
+SEQUENTIAL_BLUES = ["#fcfcfb", "#cde2fb", "#86b6ef", "#2a78d6", "#184f95"]
+
+
+@dataclass
+class EquipmentPlot:
+    """A figure and the data it shows (sent to the LLM along with the figure)."""
+
+    figure: Figure
+    data: dict
+
+
+def _style_axes(ax) -> None:
+    ax.grid(color=GRID_COLOR, lw=0.8)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(GRID_COLOR)
+    ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
+
+
+class EquipmentPlotFactory:
+    """Builds the figures of one equipment report from the solar incidents dataframe.
+
+    The whole dataframe is kept (``df``) because some figures compare the
+    equipment with the rest of its site. Each ``plot_*`` method returns an
+    ``EquipmentPlot``; adding a method is enough to add a figure (and its
+    JSON) to the pipeline output.
+    """
+
+    REQUIRED_COLUMNS: ClassVar[list[str]] = [
+        *PlotFactory.REQUIRED_COLUMNS,
+        "incident_id",
+        "cluster_name",
+    ]
+
+    def __init__(self, df: pd.DataFrame, equipment_id: str) -> None:
+        missing = [col for col in self.REQUIRED_COLUMNS if col not in df.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {', '.join(missing)}")
+        self.df = df
+        self.equipment_id = equipment_id
+        self.incidents = number_incidents(df, equipment_id)
+        if self.incidents.empty:
+            raise ValueError(
+                f"{equipment_id} has no moderate or severe incident to plot"
+            )
+        self.site = self.incidents["site"].iloc[0]
+
+    @classmethod
+    def plot_method_names(cls) -> list[str]:
+        """Names of all graph-building methods (``plot_*``), sorted alphabetically."""
+        return sorted(
+            name
+            for name, member in inspect.getmembers(cls, predicate=inspect.isfunction)
+            if name.startswith(PLOT_METHOD_PREFIX)
+        )
+
+    def plot_cost_timeline(self) -> EquipmentPlot:
+        """Cost of each moderate/severe incident over time, by failure mode.
+
+        Colour = failure-mode family, marker shape = failure mode, filled =
+        severe, hollow = moderate. The three most costly incidents are labelled.
+        """
+        d = self.incidents
+        fig = Figure(figsize=(11, 4.6))
+        ax = fig.subplots()
+        ax.plot(d["date"], d["estimated_cost_eur"], color=GRID_COLOR, lw=1.2, zorder=1)
+        for mode, g in d.groupby("cluster_name"):
+            color, marker = FAILURE_MODE_STYLE.get(mode, DEFAULT_STYLE)
+            severe = g["severity"] == SEVERE
+            ax.scatter(
+                g.loc[severe, "date"],
+                g.loc[severe, "estimated_cost_eur"],
+                s=70,
+                marker=marker,
+                color=color,
+                edgecolor="white",
+                linewidth=1.5,
+                zorder=3,
+            )
+            ax.scatter(
+                g.loc[~severe, "date"],
+                g.loc[~severe, "estimated_cost_eur"],
+                s=60,
+                marker=marker,
+                facecolor="white",
+                edgecolor=color,
+                linewidth=2,
+                zorder=3,
+            )
+
+        top = d.nlargest(3, "estimated_cost_eur")
+        for _, r in top.iterrows():
+            ax.annotate(
+                f"{r['ref']} · {format_eur(r['estimated_cost_eur'])} €",
+                (r["date"], r["estimated_cost_eur"]),
+                xytext=(8, 6),
+                textcoords="offset points",
+                fontsize=9,
+                color=TEXT_SECONDARY,
+            )
+
+        _style_axes(ax)
+        ax.set_ylabel("Estimated cost (€)", color=TEXT_SECONDARY)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: format_eur(v)))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        pad = pd.Timedelta(days=20)
+        ax.set_xlim(self.df["date"].min() - pad, self.df["date"].max() + pad)
+        ax.set_title(
+            f"{self.equipment_id} — cost of moderate and severe incidents by failure mode",
+            loc="left",
+            fontsize=12,
+        )
+
+        handles = []
+        for mode in sorted(d["cluster_name"].unique()):
+            color, marker = FAILURE_MODE_STYLE.get(mode, DEFAULT_STYLE)
+            handles.append(
+                Line2D(
+                    [], [], ls="", marker=marker, color=color, markersize=8, label=mode
+                )
+            )
+        handles += [
+            Line2D(
+                [],
+                [],
+                ls="",
+                marker="o",
+                color=TEXT_SECONDARY,
+                markersize=8,
+                label="filled = severe",
+            ),
+            Line2D(
+                [],
+                [],
+                ls="",
+                marker="o",
+                markerfacecolor="white",
+                markeredgecolor=TEXT_SECONDARY,
+                markeredgewidth=2,
+                markersize=8,
+                label="hollow = moderate",
+            ),
+        ]
+        ax.legend(
+            handles=handles,
+            loc="upper left",
+            bbox_to_anchor=(1.01, 1),
+            frameon=False,
+            fontsize=8,
+        )
+        fig.tight_layout()
+
+        points = [
+            {
+                "ref": r["ref"],
+                "date": f"{r['date']:%Y-%m-%d}",
+                "severity": r["severity"],
+                "failure_mode": r["cluster_name"],
+                "cost_eur": round(float(r["estimated_cost_eur"])),
+                "downtime_h": round(float(r["downtime_hours"]), 1),
+                "weather_condition": r["weather_condition"],
+                "days_since_previous_incident": None
+                if pd.isna(r["days_since_previous"])
+                else int(r["days_since_previous"]),
+                "days_since_previous_same_failure_mode": None
+                if pd.isna(r["days_since_previous_same_mode"])
+                else int(r["days_since_previous_same_mode"]),
+            }
+            for _, r in d.iterrows()
+        ]
+        data = {
+            "figure": "Cost timeline of moderate and severe incidents",
+            "how_to_read": "One point per incident, in chronological order; the three most "
+            "costly incidents are labelled on the figure.",
+            "labelled_incidents": top["ref"].tolist(),
+            "points": points,
+        }
+        return EquipmentPlot(fig, data)
+
+    def plot_downtime_weather(self) -> EquipmentPlot:
+        """Downtime of each incident per weather condition (dot strip + median tick)."""
+        d = self.incidents
+        conditions = ordered_weather(d["weather_condition"])
+        fig = Figure(figsize=(9, 0.5 * len(conditions) + 1.4))
+        ax = fig.subplots()
+        rng = np.random.default_rng(0)
+        for i, weather in enumerate(conditions):
+            g = d[d["weather_condition"] == weather]
+            y = i + rng.uniform(-0.15, 0.15, len(g))
+            ax.scatter(
+                g["downtime_hours"],
+                y,
+                s=40,
+                color="#2a78d6",
+                edgecolor="white",
+                linewidth=1,
+                zorder=3,
+            )
+            ax.vlines(
+                g["downtime_hours"].median(),
+                i - 0.3,
+                i + 0.3,
+                color="#0b0b0b",
+                lw=2,
+                zorder=4,
+            )
+            ax.text(
+                1.01,
+                i,
+                f"n={len(g)} · {g['downtime_hours'].sum():.0f} h",
+                transform=ax.get_yaxis_transform(),
+                va="center",
+                fontsize=8,
+                color=TEXT_SECONDARY,
+            )
+        _style_axes(ax)
+        ax.set_yticks(range(len(conditions)))
+        ax.set_yticklabels(conditions)
+        ax.invert_yaxis()
+        ax.set_xlabel(
+            "Downtime per incident in hours (black tick = median)", color=TEXT_SECONDARY
+        )
+        ax.set_title(
+            f"{self.equipment_id} — downtime vs weather (moderate + severe)",
+            loc="left",
+            fontsize=12,
+        )
+        fig.tight_layout()
+
+        data = {
+            "figure": "Downtime vs weather condition",
+            "how_to_read": "Rows sorted by total downtime. 'representation' compares the share of the "
+            "equipment's incidents under this weather with the share on the whole site.",
+            "rows": weather_table(d, site_focus(self.df, self.site)),
+        }
+        return EquipmentPlot(fig, data)
+
+    def plot_cluster_weather(self) -> EquipmentPlot:
+        """Number of incidents per failure mode and weather condition (sequential heatmap)."""
+        d = self.incidents
+        ct = pd.crosstab(d["cluster_name"], d["weather_condition"])
+        ct = ct[ordered_weather(ct.columns)]
+        cmap = LinearSegmentedColormap.from_list("blues", SEQUENTIAL_BLUES)
+        fig = Figure(figsize=(0.95 * ct.shape[1] + 4, 0.5 * ct.shape[0] + 1.8))
+        ax = fig.subplots()
+        vmax = max(int(ct.values.max()), 1)
+        ax.imshow(ct.values, cmap=cmap, vmin=0, vmax=vmax, aspect="auto")
+        for i in range(ct.shape[0]):
+            for j in range(ct.shape[1]):
+                n = ct.values[i, j]
+                if n:
+                    ax.text(
+                        j,
+                        i,
+                        n,
+                        ha="center",
+                        va="center",
+                        fontsize=9,
+                        color="white" if n > 0.55 * vmax else "#0b0b0b",
+                    )
+        ax.set_xticks(range(ct.shape[1]))
+        ax.set_xticklabels(
+            ct.columns, rotation=30, ha="right", fontsize=9, color=TEXT_SECONDARY
+        )
+        ax.set_yticks(range(ct.shape[0]))
+        ax.set_yticklabels(ct.index, fontsize=9, color=TEXT_SECONDARY)
+        ax.set_xticks(np.arange(-0.5, ct.shape[1]), minor=True)
+        ax.set_yticks(np.arange(-0.5, ct.shape[0]), minor=True)
+        ax.grid(which="minor", color="white", lw=2)
+        ax.tick_params(which="both", length=0)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+        ax.set_title(
+            f"{self.equipment_id} — number of incidents: failure mode × weather",
+            loc="left",
+            fontsize=12,
+        )
+        fig.tight_layout()
+
+        data = {
+            "figure": "Failure modes vs weather condition",
+            "how_to_read": "Number of incidents per failure mode (rows) and weather condition. A weather "
+            "condition absent from a failure mode's row never occurred with that failure mode.",
+            "matrix": failure_mode_weather_matrix(d),
+        }
+        return EquipmentPlot(fig, data)
+
+
+def run_equipment_plotting(
+    df: pd.DataFrame,
+    criticality: pd.DataFrame,
+    equipment_ids: list[str],
+    site_dir: Path,
+) -> None:
+    """Write the figures and JSON files of every equipment report of one site.
+
+    For each equipment, in ``<site_dir>/<equipment_id>/``:
+
+    - ``figures/<name>.png`` — one PNG per ``EquipmentPlotFactory.plot_*`` method;
+    - ``json/<name>.json`` — the data shown by that figure;
+    - ``json/stats.json`` — every statistic of the report
+      (``equipment_stats.build_equipment_stats``).
+    """
+    for equipment_id in equipment_ids:
+        figures_dir = site_dir / equipment_id / "figures"
+        json_dir = site_dir / equipment_id / "json"
+        figures_dir.mkdir(parents=True, exist_ok=True)
+        json_dir.mkdir(parents=True, exist_ok=True)
+
+        factory = EquipmentPlotFactory(df, equipment_id)
+        for method in EquipmentPlotFactory.plot_method_names():
+            plot = getattr(factory, method)()
+            name = method.removeprefix(PLOT_METHOD_PREFIX)
+            plot.figure.savefig(
+                figures_dir / f"{name}.png", dpi=150, bbox_inches="tight"
+            )
+            (json_dir / f"{name}.json").write_text(
+                json.dumps(plot.data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
+        stats = build_equipment_stats(df, criticality, equipment_id)
+        (json_dir / "stats.json").write_text(
+            json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"Saved figures and JSON of {equipment_id} in {site_dir / equipment_id}")
+
+
+def add_equipment_plotting_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add equipment-plotting-specific arguments to *parser*."""
+    # Team convention is data/; the branch also versions a copy at the root
+    candidates = [
+        PROJECT_ROOT / "data" / "incidents_clusterised_solar.csv",
+        PROJECT_ROOT / "incidents_clusterised_solar.csv",
+    ]
+    parser.add_argument(
+        "--solar-csv",
+        type=Path,
+        default=next((path for path in candidates if path.exists()), candidates[0]),
+        help="Path to the clusterised solar incidents CSV (data/ first, then the project root).",
+    )
+    parser.add_argument(
+        "--equipment-output-dir",
+        type=Path,
+        default=PROJECT_ROOT / "equipment_reports",
+        help="Directory where <site>/<equipment>/{figures,json,sections,report.md} are written.",
     )

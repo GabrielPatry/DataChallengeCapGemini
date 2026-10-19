@@ -204,6 +204,37 @@ You can also start the preprocessing only using:
 uv run datachallengecapgemini-preprocess
 ```
 
+### Equipment-level reports (solar)
+
+One report per critical equipment of a site, written section by section by
+specialised Azure OpenAI agents:
+
+```bash
+uv run dc-equipment --site OUEST1             # critical equipment of the site
+uv run dc-equipment --site OUEST1 --dry-run   # figures, JSON and prompts, no Azure call
+uv run dc-equipment --site OUEST1 --equipment OUEST1-INV10 --force root_causes
+```
+
+1. **Selection** (`equipment_stats.py`): every equipment gets a 0-100
+   criticality score (incidents, severe incidents ×2, cost, downtime) against
+   its site and against the fleet; it is critical (P1/P2) when one of them
+   reaches 75. `--all-equipment` reports on every equipment of the site.
+2. **Plotting** (`plot_factory.EquipmentPlotFactory`): for each equipment,
+   `figures/<name>.png` and `json/<name>.json` (the data of each figure),
+   plus `json/stats.json` with every statistic of the report.
+3. **Reporting** (`report_factory`): one `section_*` function per section,
+   each asking its own agent (role + shared rules, the section's questions
+   and only its statistics and figure JSON). The agents never calculate;
+   priorities, risk level and confidence are decided in Python, and every
+   answer is checked (numbers absent from the input, wrong incident numbers,
+   P1 failure modes without action) with one automatic correction round.
+   Sections are saved in `sections/<name>.md` and assembled into `report.md`
+   with `templates/equipment_report.md`.
+
+Outputs go to `equipment_reports/<site>/<equipment>/`. Agent answers are
+cached in `sections/` and only requested again when their prompt changes
+(or with `--force [SECTION ...]`).
+
 ## Running the notebook
 
 The notebook is a **marimo** notebook (not Jupyter). Start the marimo server:

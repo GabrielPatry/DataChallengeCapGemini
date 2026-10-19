@@ -27,6 +27,7 @@ dependencies = [
 [project.scripts]
 dc = "datachallengecapgemini:main"
 datachallengecapgemini = "datachallengecapgemini:main"
+dc-equipment = "datachallengecapgemini:main_equipment"
 datachallengecapgemini-preprocess = "datachallengecapgemini.preprocessing:main"
 
 [build-system]
