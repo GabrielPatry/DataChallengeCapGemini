@@ -2,14 +2,14 @@
 
 ``SolarPlotFactory`` and ``WindPlotFactory`` each wrap one clusterised
 incidents dataframe and expose one ``plot_*`` method per figure. Every method
-returns a ``plotly.graph_objects.Figure`` built from the dataframe held in the
-``df`` attribute.
+returns a ``plotly.graph_objects.Figure`` and a dictionary describing the
+figure, built from the dataframe held in the ``df`` attribute.
 
 The pipeline iterates over every ``plot_*`` method (see
-``PlotFactory.plot_method_names``) and saves each figure twice in separate
-solar and wind output directories: once as a PNG in the ``png`` subfolder
-(requires the ``kaleido`` package) and once as an interactive HTML page in the
-``html`` subfolder.
+``PlotFactory.plot_method_names``) and saves each figure as a PNG in the
+``png`` subfolder (requires the ``kaleido`` package) and an interactive HTML
+page in the ``html`` subfolder. Each method's description is saved as JSON in
+the ``json`` subfolder.
 
 Available as a CLI step through the top-level ``datachallengecapgemini``
 entry point:
@@ -19,6 +19,7 @@ entry point:
 
 import argparse
 import inspect
+import json
 from pathlib import Path
 from typing import ClassVar
 
@@ -101,12 +102,12 @@ class PlotFactory:
         )
 
     # ------------------------------------------------------------------
-    # Graph-building methods — each returns a plotly Figure
+    # Graph-building methods — each returns a plotly Figure and its description
     # ------------------------------------------------------------------
 
     def plot_daily_cost_for_equipment(
         self, equipment_id: str | None = None
-    ) -> go.Figure:
+    ) -> tuple[go.Figure, dict[str, object]]:
         """Daily estimated cost over time for a single equipment.
 
         Inspired by ``notebooks/view_csv_data.py``: costs are summed per day
@@ -150,9 +151,26 @@ class PlotFactory:
             },
         )
         fig.update_traces(mode="lines+markers")
-        return fig
+        description = {
+            "title": f"Coût estimé quotidien - Équipement : {equipment_id}",
+            "chart_type": "courbe avec marqueurs quotidiens",
+            "main_features": (
+                "Coût estimé quotidien pour un équipement ; les jours sans "
+                "incident sont représentés par une valeur nulle."
+            ),
+            "equipment_id": str(equipment_id),
+            "date_range": [
+                df_daily_cost["date"].min().date().isoformat(),
+                df_daily_cost["date"].max().date().isoformat(),
+            ],
+            "total_estimated_cost_eur": float(df_equipment["estimated_cost_eur"].sum()),
+            "days_shown": len(df_daily_cost),
+        }
+        return fig, description
 
-    def plot_cost_distribution_per_equipment_by_site(self) -> go.Figure:
+    def plot_cost_distribution_per_equipment_by_site(
+        self,
+    ) -> tuple[go.Figure, dict[str, object]]:
         """Box plot of the total estimated cost per equipment, grouped by site.
 
         Inspired by ``notebooks/view_csv_data.py``.
@@ -176,9 +194,22 @@ class PlotFactory:
         )
         fig.update_layout(showlegend=False)
         fig.update_yaxes(showgrid=True, zeroline=False)
-        return fig
+        description = {
+            "title": "Distribution du coût total par équipement et par site",
+            "chart_type": "boîte à moustaches avec les points de chaque équipement",
+            "main_features": (
+                "Compare la distribution du coût total estimé par équipement "
+                "entre les sites ; chaque point représente un équipement."
+            ),
+            "sites": sorted(cost_by_site_equipment["site"].astype(str).unique()),
+            "equipment_count": len(cost_by_site_equipment),
+            "cost_metric": "coût total estimé par équipement (EUR)",
+        }
+        return fig, description
 
-    def plot_daily_cost_top_equipment_at_top_site(self, top_n: int = 3) -> go.Figure:
+    def plot_daily_cost_top_equipment_at_top_site(
+        self, top_n: int = 3
+    ) -> tuple[go.Figure, dict[str, object]]:
         """Daily estimated cost over time for the top-N equipment at the highest-cost site.
 
         Inspired by ``notebooks/view_csv_data.py``: the site with the highest
@@ -232,9 +263,32 @@ class PlotFactory:
             },
         )
         fig.update_traces(mode="markers", marker={"size": 8})
-        return fig
+        description = {
+            "title": (
+                f"Évolution du coût estimé - {top_n} équipements principaux "
+                f"du site : {selected_site}"
+            ),
+            "chart_type": "nuage de points quotidien avec une série par équipement",
+            "main_features": (
+                "Coûts quotidiens des équipements les plus coûteux du site dont "
+                "le coût estimé total est le plus élevé. Les marqueurs ne sont "
+                "pas reliés par des lignes."
+            ),
+            "selected_site": str(selected_site),
+            "site_total_estimated_cost_eur": float(cost_by_site.loc[selected_site]),
+            "top_equipment": [
+                {
+                    "equipment_id": str(row["equipment_id"]),
+                    "total_estimated_cost_eur": float(row["estimated_cost_eur"]),
+                }
+                for _, row in cost_by_equipment_site.head(top_n).iterrows()
+            ],
+        }
+        return fig, description
 
-    def plot_incident_count_by_severity(self) -> go.Figure:
+    def plot_incident_count_by_severity(
+        self,
+    ) -> tuple[go.Figure, dict[str, object]]:
         """Number of incidents per severity level, split by asset type."""
         counts = (
             self.df.groupby(["severity", "asset_type"])
@@ -256,9 +310,27 @@ class PlotFactory:
             },
             category_orders={"severity": SEVERITY_ORDER},
         )
-        return fig
+        description = {
+            "title": "Nombre d'incidents par niveau de sévérité et type d'actif",
+            "chart_type": "diagramme à barres groupées",
+            "main_features": (
+                "Compare le nombre d'incidents par niveau de sévérité, avec des "
+                "barres distinctes pour chaque type d'actif."
+            ),
+            "incident_counts": [
+                {
+                    "severity": str(row["severity"]),
+                    "asset_type": str(row["asset_type"]),
+                    "incident_count": int(row["incident_count"]),
+                }
+                for _, row in counts.iterrows()
+            ],
+        }
+        return fig, description
 
-    def plot_total_cost_by_weather_condition(self) -> go.Figure:
+    def plot_total_cost_by_weather_condition(
+        self,
+    ) -> tuple[go.Figure, dict[str, object]]:
         """Total estimated cost per weather condition, split by asset type."""
         totals = (
             self.df.groupby(["weather_condition", "asset_type"])["estimated_cost_eur"]
@@ -279,9 +351,26 @@ class PlotFactory:
             },
         )
         fig.update_xaxes(tickangle=-45)
-        return fig
+        description = {
+            "title": "Coût estimé total par condition météorologique et type d'actif",
+            "chart_type": "diagramme à barres groupées",
+            "main_features": (
+                "Compare le coût estimé total selon les conditions "
+                "météorologiques, avec des barres distinctes pour chaque type "
+                "d'actif."
+            ),
+            "cost_totals_eur": [
+                {
+                    "weather_condition": str(row["weather_condition"]),
+                    "asset_type": str(row["asset_type"]),
+                    "total_estimated_cost_eur": float(row["estimated_cost_eur"]),
+                }
+                for _, row in totals.iterrows()
+            ],
+        }
+        return fig, description
 
-    def plot_downtime_vs_cost(self) -> go.Figure:
+    def plot_downtime_vs_cost(self) -> tuple[go.Figure, dict[str, object]]:
         """Scatter plot of downtime duration vs estimated cost, per asset type."""
         fig = px.scatter(
             self.df,
@@ -299,9 +388,29 @@ class PlotFactory:
             },
             category_orders={"severity": SEVERITY_ORDER},
         )
-        return fig
+        description = {
+            "title": "Coût estimé en fonction du temps d'arrêt",
+            "chart_type": "nuage de points avec facettes",
+            "main_features": (
+                "Chaque point représente un incident ; le temps d'arrêt est en "
+                "abscisse, le coût estimé en ordonnée, la couleur indique la "
+                "sévérité et les panneaux distinguent les types d'actifs."
+            ),
+            "incident_count": len(self.df),
+            "incident_counts_by_asset_type": {
+                str(key): int(value)
+                for key, value in self.df["asset_type"].value_counts().items()
+            },
+            "incident_counts_by_severity": {
+                str(key): int(value)
+                for key, value in self.df["severity"].value_counts().items()
+            },
+        }
+        return fig, description
 
-    def plot_monthly_incident_count(self) -> go.Figure:
+    def plot_monthly_incident_count(
+        self,
+    ) -> tuple[go.Figure, dict[str, object]]:
         """Number of incidents per month over time, split by asset type."""
         df_plot = self.df.copy()
         df_plot["date"] = pd.to_datetime(df_plot["date"])
@@ -325,9 +434,25 @@ class PlotFactory:
             },
         )
         fig.update_traces(mode="lines+markers")
-        return fig
+        description = {
+            "title": "Nombre d'incidents par mois et par type d'actif",
+            "chart_type": "courbe mensuelle avec marqueurs",
+            "main_features": (
+                "Présente l'évolution mensuelle du nombre d'incidents, avec une "
+                "série distincte pour chaque type d'actif."
+            ),
+            "monthly_incident_counts": [
+                {
+                    "month": row["month"].date().isoformat(),
+                    "asset_type": str(row["asset_type"]),
+                    "incident_count": int(row["incident_count"]),
+                }
+                for _, row in counts.iterrows()
+            ],
+        }
+        return fig, description
 
-    def plot_total_cost_by_site(self) -> go.Figure:
+    def plot_total_cost_by_site(self) -> tuple[go.Figure, dict[str, object]]:
         """Total estimated cost per site, split by asset type."""
         totals = (
             self.df.groupby(["site", "asset_type"])["estimated_cost_eur"]
@@ -347,7 +472,23 @@ class PlotFactory:
                 "asset_type": "Asset Type",
             },
         )
-        return fig
+        description = {
+            "title": "Coût estimé total par site et type d'actif",
+            "chart_type": "diagramme à barres groupées",
+            "main_features": (
+                "Compare le coût estimé total des incidents entre les sites, "
+                "avec des barres distinctes pour chaque type d'actif."
+            ),
+            "cost_totals_eur": [
+                {
+                    "site": str(row["site"]),
+                    "asset_type": str(row["asset_type"]),
+                    "total_estimated_cost_eur": float(row["estimated_cost_eur"]),
+                }
+                for _, row in totals.iterrows()
+            ],
+        }
+        return fig, description
 
 
 class SolarPlotFactory(PlotFactory):
@@ -359,7 +500,7 @@ class WindPlotFactory(PlotFactory):
 
 
 # ---------------------------------------------------------------------------
-# Pipeline step — build every plot and save it as PNG + HTML
+# Pipeline step — build every plot and save it as PNG + HTML + JSON
 # ---------------------------------------------------------------------------
 
 
@@ -368,8 +509,9 @@ def run_plotting(
 ) -> None:
     """Build solar and wind plots under separate directories in *plots_output_dir*.
 
-    Each figure is saved twice: as ``<name>.png`` in the ``png`` subfolder and
-    as ``<name>.html`` in the ``html`` subfolder, where ``<name>`` is a
+    Each figure and its description are saved as ``<name>.png`` in the
+    ``png`` subfolder, ``<name>.html`` in the ``html`` subfolder, and
+    ``<name>.json`` in the ``json`` subfolder, where ``<name>`` is a
     ``plot_*`` method name.
     """
     for label, factory_type, csv_path in (
@@ -380,17 +522,25 @@ def run_plotting(
         output_dir = plots_output_dir / label
         png_dir = output_dir / "png"
         html_dir = output_dir / "html"
+        json_dir = output_dir / "json"
         png_dir.mkdir(parents=True, exist_ok=True)
         html_dir.mkdir(parents=True, exist_ok=True)
+        json_dir.mkdir(parents=True, exist_ok=True)
 
         for name in factory_type.plot_method_names():
-            fig = getattr(factory, name)()
+            fig, description = getattr(factory, name)()
             png_path = png_dir / f"{name}.png"
             html_path = html_dir / f"{name}.html"
+            json_path = json_dir / f"{name}.json"
             fig.write_image(png_path)
             fig.write_html(html_path)
+            json_path.write_text(
+                json.dumps(description, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
             print(f"Saved {png_path}")
             print(f"Saved {html_path}")
+            print(f"Saved {json_path}")
 
         print(
             f"Done. {len(factory_type.plot_method_names())} {label} plots are in {output_dir}"
@@ -415,5 +565,5 @@ def add_plotting_arguments(parser: argparse.ArgumentParser) -> None:
         "--plots-output-dir",
         type=Path,
         default=PROJECT_ROOT / "data" / "plots",
-        help="Directory where plots are saved (png/ and html/ subfolders are created inside).",
+        help="Directory where plots are saved (png/, html/ and json/ subfolders are created inside).",
     )

@@ -11,6 +11,8 @@ is produced by filling a template stored in the ``templates/`` folder with:
   PNG is missing but the interactive HTML version exists, a link to the HTML
   page is emitted instead; a figure missing from both folders is replaced by
   a placeholder note and a warning is printed.
+- **Figure descriptions** — JSON descriptions from the ``json`` subfolder are
+  passed to the prose agents as additional context.
 - **Prose** — synopsis, methodology, per-cluster descriptions, recommendations
   and conclusion. These are generated in French by the LLM agents of
   :class:`ReportFactory` (Azure OpenAI, gpt-4.1-nano): each section has its
@@ -32,6 +34,7 @@ point:
 """
 
 import argparse
+import json
 import os
 import re
 from collections.abc import Sequence
@@ -86,6 +89,7 @@ class ReportState(TypedDict, total=False):
     label: str
     statistics: str
     clusters: str
+    plot_descriptions: str
     # Outputs of the graph nodes
     cost_drivers: str
     draft_recommendations: str
@@ -134,7 +138,8 @@ SYNOPSIS_SYSTEM_PROMPT = (
     "des actifs industriels. Rédige un synopsis exécutif concis (un "
     "paragraphe de 80 à 120 mots) pour le parc {label} : les thèmes "
     "d'incidents dominants et leur poids dans le coût estimé et le temps "
-    "d'arrêt. Utilise uniquement les statistiques et le résumé des clusters "
+    "d'arrêt. Utilise uniquement les statistiques, le résumé des clusters et "
+    "les descriptions des figures "
     "fournis, n'invente aucun chiffre. Rédige en français, avec un ton de "
     "rapport professionnel."
 )
@@ -160,13 +165,15 @@ CLUSTER_DESCRIPTION_SYSTEM_PROMPT = (
     "à 100 mots) : la signature de défaillance commune, le site le plus "
     "touché, la sévérité dominante, l'exposition en coût et en temps "
     "d'arrêt, et une hypothèse de cause racine. Utilise uniquement les "
-    "statistiques du cluster fournies, n'invente aucun chiffre. Rédige en "
+    "statistiques du cluster et les descriptions des figures fournies, "
+    "n'invente aucun chiffre. Rédige en "
     "français, avec un ton de rapport professionnel."
 )
 
 COST_DRIVERS_SYSTEM_PROMPT = (
     "Tu es stratège de maintenance pour un parc d'actifs {label}. À partir "
-    "des statistiques et du résumé des clusters fournis, liste les 3 à 5 "
+    "des statistiques, du résumé des clusters et des descriptions des figures "
+    "fournis, liste les 3 à 5 "
     "principaux facteurs de coût estimé et de temps d'arrêt, un par ligne, "
     "chacun justifié en une phrase par les données. N'invente aucun "
     "chiffre. Rédige en français."
@@ -196,7 +203,8 @@ CONCLUSION_SYSTEM_PROMPT = (
     "des actifs industriels. Rédige la conclusion du rapport du parc "
     "{label} en un paragraphe (60 à 100 mots) : résume les principaux "
     "constats et renvoie vers les recommandations. Utilise le synopsis, "
-    "les statistiques et les recommandations fournis, n'invente aucun "
+    "les statistiques, les descriptions des figures et les recommandations "
+    "fournis, n'invente aucun "
     "chiffre. Rédige en français, avec un ton de rapport professionnel."
 )
 
@@ -225,8 +233,8 @@ class ReportFactory:
     clusterised incidents dataframe is the main attribute (``df``), completed
     by the asset ``label``. The chat model (Azure OpenAI, gpt-4.1-nano
     deployment) is the ``llm`` attribute, and the context shared by the
-    agents (``statistics``, ``clusters``, ``cluster_table``) is precomputed
-    at construction.
+    agents (``statistics``, ``clusters``, ``cluster_table`` and the JSON
+    ``plot_descriptions``) is precomputed at construction.
 
     Private ``_*_prompt`` methods only build :class:`ChatPromptTemplate`
     instances. The public ``write_*`` methods handle the execution — a
@@ -261,10 +269,18 @@ class ReportFactory:
     )
 
     def __init__(
-        self, df: pd.DataFrame, label: str, llm: BaseChatModel | None = None
+        self,
+        df: pd.DataFrame,
+        label: str,
+        llm: BaseChatModel | None = None,
+        plot_descriptions: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.df = df
         self.label = label
+        self.plot_descriptions = plot_descriptions or {}
+        self.plot_descriptions_context = json.dumps(
+            self.plot_descriptions, ensure_ascii=False, indent=2
+        )
         self.token_usage = TokenUsageCallback()
         self.llm = llm if llm is not None else self._default_llm()
         # Context elements shared by every agent
@@ -383,6 +399,7 @@ class ReportFactory:
                         "Type d'actif : {label}\n\n"
                         "Statistiques clés :\n{statistics}\n\n"
                         "Résumé des clusters :\n{clusters}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Rédige le synopsis du rapport."
                     ),
                 ),
@@ -399,6 +416,7 @@ class ReportFactory:
                     (
                         "Type d'actif : {label}\n\n"
                         "Statistiques clés :\n{statistics}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Rédige la section méthodologie du rapport."
                     ),
                 ),
@@ -416,6 +434,7 @@ class ReportFactory:
                         "Type d'actif : {label}\n\n"
                         "Cluster : {cluster_name} ({cluster_code})\n\n"
                         "Statistiques du cluster :\n{cluster_stats}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Rédige la description de ce cluster."
                     ),
                 ),
@@ -433,6 +452,7 @@ class ReportFactory:
                         "Type d'actif : {label}\n\n"
                         "Statistiques clés :\n{statistics}\n\n"
                         "Résumé des clusters :\n{clusters}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Liste les principaux facteurs de coût et de temps "
                         "d'arrêt."
                     ),
@@ -452,6 +472,7 @@ class ReportFactory:
                         "Facteurs de coût et de temps d'arrêt :\n"
                         "{cost_drivers}\n\n"
                         "Résumé des clusters :\n{clusters}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Rédige une recommandation par facteur."
                     ),
                 ),
@@ -468,6 +489,7 @@ class ReportFactory:
                     (
                         "Type d'actif : {label}\n\n"
                         "Statistiques clés :\n{statistics}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Recommandations provisoires :\n"
                         "{draft_recommendations}\n\n"
                         "Rédige la liste à puces finale et priorisée."
@@ -486,6 +508,7 @@ class ReportFactory:
                     (
                         "Type d'actif : {label}\n\n"
                         "Statistiques clés :\n{statistics}\n\n"
+                        "Descriptions des figures :\n{plot_descriptions}\n\n"
                         "Synopsis :\n{synopsis}\n\n"
                         "Recommandations :\n{recommendations}\n\n"
                         "Rédige la conclusion du rapport."
@@ -506,6 +529,7 @@ class ReportFactory:
                 "label": self.label,
                 "statistics": self.statistics,
                 "clusters": self.clusters,
+                "plot_descriptions": self.plot_descriptions_context,
             },
             config={"callbacks": [self.token_usage]},
         )
@@ -517,7 +541,11 @@ class ReportFactory:
         """Generate the methodology section; stored in *prose* if given."""
         chain = self._methodology_prompt() | self.llm | StrOutputParser()
         text = chain.invoke(
-            {"label": self.label, "statistics": self.statistics},
+            {
+                "label": self.label,
+                "statistics": self.statistics,
+                "plot_descriptions": self.plot_descriptions_context,
+            },
             config={"callbacks": [self.token_usage]},
         )
         if prose is not None:
@@ -535,6 +563,7 @@ class ReportFactory:
                 "cluster_code": cluster_code,
                 "cluster_name": cluster_name,
                 "cluster_stats": cluster_stats,
+                "plot_descriptions": self.plot_descriptions_context,
             },
             config={"callbacks": [self.token_usage]},
         )
@@ -616,6 +645,7 @@ class ReportFactory:
             "label": self.label,
             "statistics": self.statistics,
             "clusters": self.clusters,
+            "plot_descriptions": self.plot_descriptions_context,
         }
         text = graph.compile().invoke(state, config={"callbacks": [self.token_usage]})[
             "recommendations"
@@ -641,6 +671,7 @@ class ReportFactory:
             {
                 "label": self.label,
                 "statistics": self.statistics,
+                "plot_descriptions": self.plot_descriptions_context,
                 "synopsis": prose.synopsis,
                 "recommendations": prose.recommendations,
             },
@@ -687,27 +718,43 @@ class ReportFactory:
 class SolarReportFactory(ReportFactory):
     """Generates report prose for the solar fleet (label ``solar``)."""
 
-    def __init__(self, df: pd.DataFrame, llm: BaseChatModel | None = None) -> None:
-        super().__init__(df, "solar", llm=llm)
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        llm: BaseChatModel | None = None,
+        plot_descriptions: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(df, "solar", llm=llm, plot_descriptions=plot_descriptions)
 
     @classmethod
     def from_csv(
-        cls, csv_path: Path, llm: BaseChatModel | None = None
+        cls,
+        csv_path: Path,
+        llm: BaseChatModel | None = None,
+        plot_descriptions: dict[str, dict[str, Any]] | None = None,
     ) -> "SolarReportFactory":
-        return cls(pd.read_csv(csv_path), llm=llm)
+        return cls(pd.read_csv(csv_path), llm=llm, plot_descriptions=plot_descriptions)
 
 
 class WindReportFactory(ReportFactory):
     """Generates report prose for the wind fleet (label ``wind``)."""
 
-    def __init__(self, df: pd.DataFrame, llm: BaseChatModel | None = None) -> None:
-        super().__init__(df, "wind", llm=llm)
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        llm: BaseChatModel | None = None,
+        plot_descriptions: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(df, "wind", llm=llm, plot_descriptions=plot_descriptions)
 
     @classmethod
     def from_csv(
-        cls, csv_path: Path, llm: BaseChatModel | None = None
+        cls,
+        csv_path: Path,
+        llm: BaseChatModel | None = None,
+        plot_descriptions: dict[str, dict[str, Any]] | None = None,
     ) -> "WindReportFactory":
-        return cls(pd.read_csv(csv_path), llm=llm)
+        return cls(pd.read_csv(csv_path), llm=llm, plot_descriptions=plot_descriptions)
 
 
 def fill_template(template: str, context: dict[str, str]) -> str:
@@ -750,6 +797,17 @@ def _figure_markdown(plot_name: str, plots_dir: Path, report_dir: Path) -> str:
         f"No figure found for plot '{plot_name}' in {plots_dir / 'png'} "
         f"or {plots_dir / 'html'} — run the plotting step first."
     )
+
+
+def _load_plot_descriptions(plots_dir: Path) -> dict[str, dict[str, Any]]:
+    """Load each plot's JSON description from *plots_dir/json*."""
+    descriptions: dict[str, dict[str, Any]] = {}
+    for path in sorted((plots_dir / "json").glob("plot_*.json")):
+        description = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(description, dict):
+            raise TypeError(f"Plot description must be a JSON object: {path}")
+        descriptions[path.stem] = description
+    return descriptions
 
 
 def build_report_context(
@@ -930,7 +988,7 @@ def run_reporting(
 
     Reads ``<templates_dir>/<label>_report.md`` for each label, fills it with
     statistics from the clusterised CSV and figures from
-    ``<plots_output_dir>/<label>/{png,html}``, and writes the result to
+    ``<plots_output_dir>/<label>/{png,html,json}``, and writes the result to
     ``<reports_output_dir>/<label>/report.md``.
 
     Prose is generated by the LLM agents of :class:`ReportFactory` (Azure
@@ -949,7 +1007,8 @@ def run_reporting(
         report_dir = reports_output_dir / label
         report_dir.mkdir(parents=True, exist_ok=True)
 
-        factory = factory_type(df)
+        plot_descriptions = _load_plot_descriptions(plots_dir)
+        factory = factory_type(df, plot_descriptions=plot_descriptions)
         prose = factory.generate_prose()
 
         template = template_path.read_text(encoding="utf-8")
