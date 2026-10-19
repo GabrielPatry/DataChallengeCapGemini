@@ -1,0 +1,176 @@
+{
+  "figure": "Cost timeline of moderate and severe incidents",
+  "how_to_read": "One point per incident, in chronological order; the three most costly incidents are labelled on the figure.",
+  "labelled_incidents": [
+    "#3",
+    "#10",
+    "#4"
+  ],
+  "points": [
+    {
+      "ref": "#1",
+      "date": "2023-05-15",
+      "severity": "modérée",
+      "failure_mode": "Baisse de rendement onduleur",
+      "cost_eur": 7670,
+      "downtime_h": 24.0,
+      "weather_condition": "conditions nominales",
+      "days_since_previous_incident": null,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#2",
+      "date": "2023-05-18",
+      "severity": "modérée",
+      "failure_mode": "Salissure et nettoyage modules PV",
+      "cost_eur": 9476,
+      "downtime_h": 24.2,
+      "weather_condition": "vent modéré",
+      "days_since_previous_incident": 3,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#3",
+      "date": "2023-11-21",
+      "severity": "sévère",
+      "failure_mode": "Dégradation et court-circuit câblage",
+      "cost_eur": 49142,
+      "downtime_h": 82.4,
+      "weather_condition": "temps calme",
+      "days_since_previous_incident": 187,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#4",
+      "date": "2023-12-22",
+      "severity": "sévère",
+      "failure_mode": "Baisse de rendement onduleur",
+      "cost_eur": 24165,
+      "downtime_h": 42.6,
+      "weather_condition": "temps calme",
+      "days_since_previous_incident": 31,
+      "days_since_previous_same_failure_mode": 221
+    },
+    {
+      "ref": "#5",
+      "date": "2024-02-26",
+      "severity": "modérée",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 2540,
+      "downtime_h": 7.0,
+      "weather_condition": "vent fort / tempête",
+      "days_since_previous_incident": 66,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#6",
+      "date": "2024-03-23",
+      "severity": "modérée",
+      "failure_mode": "Baisse de rendement onduleur",
+      "cost_eur": 5780,
+      "downtime_h": 14.7,
+      "weather_condition": "temps calme",
+      "days_since_previous_incident": 26,
+      "days_since_previous_same_failure_mode": 92
+    },
+    {
+      "ref": "#7",
+      "date": "2024-04-12",
+      "severity": "modérée",
+      "failure_mode": "Salissure et nettoyage modules PV",
+      "cost_eur": 6643,
+      "downtime_h": 20.6,
+      "weather_condition": "temps calme",
+      "days_since_previous_incident": 20,
+      "days_since_previous_same_failure_mode": 330
+    },
+    {
+      "ref": "#8",
+      "date": "2024-05-22",
+      "severity": "sévère",
+      "failure_mode": "Salissure et nettoyage modules PV",
+      "cost_eur": 12817,
+      "downtime_h": 21.5,
+      "weather_condition": "ciel dégagé",
+      "days_since_previous_incident": 40,
+      "days_since_previous_same_failure_mode": 40
+    },
+    {
+      "ref": "#9",
+      "date": "2024-06-21",
+      "severity": "sévère",
+      "failure_mode": "Incendie bâtiment support PV",
+      "cost_eur": 13226,
+      "downtime_h": 22.5,
+      "weather_condition": "temps calme",
+      "days_since_previous_incident": 30,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#10",
+      "date": "2024-07-13",
+      "severity": "sévère",
+      "failure_mode": "Incendie bâtiment support PV",
+      "cost_eur": 37904,
+      "downtime_h": 65.5,
+      "weather_condition": "pluie modérée",
+      "days_since_previous_incident": 22,
+      "days_since_previous_same_failure_mode": 22
+    },
+    {
+      "ref": "#11",
+      "date": "2024-10-06",
+      "severity": "sévère",
+      "failure_mode": "Défaillance chaîne et boîtier de jonction",
+      "cost_eur": 17578,
+      "downtime_h": 28.9,
+      "weather_condition": "vent modéré",
+      "days_since_previous_incident": 85,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#12",
+      "date": "2025-03-18",
+      "severity": "modérée",
+      "failure_mode": "Baisse de rendement onduleur",
+      "cost_eur": 6954,
+      "downtime_h": 18.9,
+      "weather_condition": "ciel dégagé",
+      "days_since_previous_incident": 163,
+      "days_since_previous_same_failure_mode": 360
+    },
+    {
+      "ref": "#13",
+      "date": "2025-03-22",
+      "severity": "modérée",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 4506,
+      "downtime_h": 13.7,
+      "weather_condition": "temps calme",
+      "days_since_previous_incident": 4,
+      "days_since_previous_same_failure_mode": null
+    },
+    {
+      "ref": "#14",
+      "date": "2025-04-10",
+      "severity": "modérée",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 5254,
+      "downtime_h": 17.9,
+      "weather_condition": "pluie modérée",
+      "days_since_previous_incident": 19,
+      "days_since_previous_same_failure_mode": 19
+    },
+    {
+      "ref": "#15",
+      "date": "2025-10-23",
+      "severity": "modérée",
+      "failure_mode": "Salissure et nettoyage modules PV",
+      "cost_eur": 3108,
+      "downtime_h": 9.6,
+      "weather_condition": "pluie modérée",
+      "days_since_previous_incident": 196,
+      "days_since_previous_same_failure_mode": 519
+    }
+  ]
+}

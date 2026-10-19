@@ -1,0 +1,186 @@
+# System
+
+You are an engineer specialised in the weather and environmental exposure of PV plants.
+
+You write one section of an equipment-level incident report for asset managers and maintenance planners of utility-scale photovoltaic plants. The equipment is a PV inverter and the DC field upstream of it.
+
+# Rules
+1. NO CALCULATIONS. Do not add, subtract, average, compare numerically, compute percentages, ratios, durations or date differences. Every number you write must be copied from the input (rounding allowed). If a figure you would like to quote is not in the input, make the point without a number.
+2. `facts` are verified, ready-made sentences: when you quote one of their figures, copy it exactly with the meaning given there (e.g. do not swap "most costly incident" and "most costly failure mode", or the ratio of one indicator for another).
+3. Refer to incidents ONLY by their local number as written in the input (e.g. "#3"). Cite an incident for a failure mode only if it is listed among that failure mode's incidents.
+4. Before linking a weather condition to a failure mode, check that failure mode's weather counts: if the weather is not listed, the failure mode never occurred under it. Never generalise a weather pattern from one failure mode to another. Weather co-occurrence is a correlation, not a proof.
+5. When an entry is flagged "indicative only", say so briefly in the same sentence (e.g. "indicative, 2 incidents"). Never write a separate paragraph about data limitations.
+6. Priorities and risk levels are given: never change or re-derive them.
+7. No mention of datasets, files, score formulas, algorithms, clustering or AI. Say "failure mode", not "cluster". Failure-mode and weather names are in French: keep them verbatim.
+8. Answer only the questions of your section; other specialists write the other sections.
+
+# Output
+Return ONLY a JSON object following the provided schema. Text fields may use Markdown emphasis and bullet lists, but no headings and no tables. Be specific and concise.
+
+# User
+
+You are writing the section "4. Weather exposure" of the incident report of equipment OUEST1-INV10 (site: Centrale PV Ouest-1).
+
+Language of every text field: English.
+
+Answer these questions:
+1. Under which weather conditions does this equipment lose the most hours? Are these conditions over- or under-represented compared with the rest of the site (`representation`)?
+2. Which failure modes occur under which weather conditions? Read each row of the matrix: link a weather condition to a failure mode only if it appears in that row. What does it imply for operations (e.g. inspections after a given weather event)?
+
+Statistics and figure data for this section (every value is already computed):
+```json
+{
+ "downtime_vs_weather_figure": {
+  "figure": "Downtime vs weather condition",
+  "how_to_read": "Rows sorted by total downtime. 'representation' compares the share of the equipment's incidents under this weather with the share on the whole site.",
+  "rows": [
+   {
+    "weather_condition": "temps calme",
+    "n_incidents": 6,
+    "n_severe": 3,
+    "incidents": [
+     "#3",
+     "#4",
+     "#6",
+     "#7",
+     "#9",
+     "#13"
+    ],
+    "downtime_total_h": 196.5,
+    "downtime_median_h": 21.6,
+    "downtime_max_h": 82.4,
+    "share_of_equipment_downtime_pct": 47.5,
+    "share_of_equipment_incidents_pct": 40.0,
+    "share_of_site_incidents_pct": 17.4,
+    "representation": "over-represented vs site",
+    "sample": "ok"
+   },
+   {
+    "weather_condition": "pluie modérée",
+    "n_incidents": 3,
+    "n_severe": 1,
+    "incidents": [
+     "#10",
+     "#14",
+     "#15"
+    ],
+    "downtime_total_h": 93.0,
+    "downtime_median_h": 17.9,
+    "downtime_max_h": 65.5,
+    "share_of_equipment_downtime_pct": 22.5,
+    "share_of_equipment_incidents_pct": 20.0,
+    "share_of_site_incidents_pct": 18.9,
+    "representation": "in line with site",
+    "sample": "ok"
+   },
+   {
+    "weather_condition": "vent modéré",
+    "n_incidents": 2,
+    "n_severe": 1,
+    "incidents": [
+     "#2",
+     "#11"
+    ],
+    "downtime_total_h": 53.1,
+    "downtime_median_h": 26.5,
+    "downtime_max_h": 28.9,
+    "share_of_equipment_downtime_pct": 12.8,
+    "share_of_equipment_incidents_pct": 13.3,
+    "share_of_site_incidents_pct": 9.8,
+    "representation": "over-represented vs site",
+    "sample": "indicative only (fewer than 3 incidents)"
+   },
+   {
+    "weather_condition": "ciel dégagé",
+    "n_incidents": 2,
+    "n_severe": 1,
+    "incidents": [
+     "#8",
+     "#12"
+    ],
+    "downtime_total_h": 40.4,
+    "downtime_median_h": 20.2,
+    "downtime_max_h": 21.5,
+    "share_of_equipment_downtime_pct": 9.8,
+    "share_of_equipment_incidents_pct": 13.3,
+    "share_of_site_incidents_pct": 13.6,
+    "representation": "in line with site",
+    "sample": "indicative only (fewer than 3 incidents)"
+   },
+   {
+    "weather_condition": "conditions nominales",
+    "n_incidents": 1,
+    "n_severe": 0,
+    "incidents": [
+     "#1"
+    ],
+    "downtime_total_h": 24.0,
+    "downtime_median_h": 24.0,
+    "downtime_max_h": 24.0,
+    "share_of_equipment_downtime_pct": 5.8,
+    "share_of_equipment_incidents_pct": 6.7,
+    "share_of_site_incidents_pct": 12.1,
+    "representation": "under-represented vs site",
+    "sample": "indicative only (fewer than 3 incidents)"
+   },
+   {
+    "weather_condition": "vent fort / tempête",
+    "n_incidents": 1,
+    "n_severe": 0,
+    "incidents": [
+     "#5"
+    ],
+    "downtime_total_h": 7.0,
+    "downtime_median_h": 7.0,
+    "downtime_max_h": 7.0,
+    "share_of_equipment_downtime_pct": 1.7,
+    "share_of_equipment_incidents_pct": 6.7,
+    "share_of_site_incidents_pct": 15.9,
+    "representation": "under-represented vs site",
+    "sample": "indicative only (fewer than 3 incidents)"
+   }
+  ]
+ },
+ "failure_modes_vs_weather_figure": {
+  "figure": "Failure modes vs weather condition",
+  "how_to_read": "Number of incidents per failure mode (rows) and weather condition. A weather condition absent from a failure mode's row never occurred with that failure mode.",
+  "matrix": {
+   "Baisse de rendement onduleur": {
+    "ciel dégagé": 1,
+    "conditions nominales": 1,
+    "temps calme": 2
+   },
+   "Dommages superficiels modules PV": {
+    "vent fort / tempête": 1
+   },
+   "Défaillance chaîne et boîtier de jonction": {
+    "vent modéré": 1
+   },
+   "Dégradation et court-circuit câblage": {
+    "temps calme": 1
+   },
+   "Incendie bâtiment support PV": {
+    "temps calme": 1,
+    "pluie modérée": 1
+   },
+   "Incendie toiture et panneaux PV": {
+    "temps calme": 1,
+    "pluie modérée": 1
+   },
+   "Salissure et nettoyage modules PV": {
+    "ciel dégagé": 1,
+    "temps calme": 1,
+    "vent modéré": 1,
+    "pluie modérée": 1
+   }
+  }
+ },
+ "facts": [
+  "Most downtime occurs under 'temps calme': 196.5 h over 6 incident(s), 47.5% of the downtime (over-represented vs site).",
+  "'temps calme' is over-represented vs site: 40.0% of the incidents of this equipment vs 17.4% on the site.",
+  "'vent modéré' is over-represented vs site: 13.3% of the incidents of this equipment vs 9.8% on the site (indicative only).",
+  "'conditions nominales' is under-represented vs site: 6.7% of the incidents of this equipment vs 12.1% on the site (indicative only).",
+  "'vent fort / tempête' is under-represented vs site: 6.7% of the incidents of this equipment vs 15.9% on the site (indicative only)."
+ ]
+}
+```

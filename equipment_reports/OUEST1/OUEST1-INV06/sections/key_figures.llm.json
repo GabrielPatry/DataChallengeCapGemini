@@ -1,0 +1,10 @@
+{
+  "prompt_sha256": "7105b63c69dbd0cd3030a150569788957e89ea5c2084c288977a133e16876f9a",
+  "usage": {
+    "prompt_tokens": 1351,
+    "completion_tokens": 134
+  },
+  "answer": {
+    "reading": "This equipment, OUEST1-INV06, stands out from the median equipment of its site on several indicators, including incidents of all severities, severe incidents, total cost, and downtime, with ratios of 1.17, 2.0, 1.9, and 1.74 respectively. It was selected because of its criticality score of 99.0 and 99.2, which are above the thresholds, indicating its high importance within the site and fleet. The cost is highly concentrated on severe incidents, which account for 89.2% of the total incident-related cost and nearly all of the downtime."
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "figure": "Downtime vs weather condition",
+  "how_to_read": "Rows sorted by total downtime. 'representation' compares the share of the equipment's incidents under this weather with the share on the whole site.",
+  "rows": [
+    {
+      "weather_condition": "conditions nominales",
+      "n_incidents": 3,
+      "n_severe": 2,
+      "incidents": [
+        "#1",
+        "#7",
+        "#11"
+      ],
+      "downtime_total_h": 142.8,
+      "downtime_median_h": 25.1,
+      "downtime_max_h": 99.2,
+      "share_of_equipment_downtime_pct": 33.7,
+      "share_of_equipment_incidents_pct": 20.0,
+      "share_of_site_incidents_pct": 12.1,
+      "representation": "over-represented vs site",
+      "sample": "ok"
+    },
+    {
+      "weather_condition": "ciel dégagé",
+      "n_incidents": 3,
+      "n_severe": 2,
+      "incidents": [
+        "#5",
+        "#6",
+        "#10"
+      ],
+      "downtime_total_h": 101.1,
+      "downtime_median_h": 21.8,
+      "downtime_max_h": 60.7,
+      "share_of_equipment_downtime_pct": 23.8,
+      "share_of_equipment_incidents_pct": 20.0,
+      "share_of_site_incidents_pct": 13.6,
+      "representation": "over-represented vs site",
+      "sample": "ok"
+    },
+    {
+      "weather_condition": "vent modéré",
+      "n_incidents": 2,
+      "n_severe": 1,
+      "incidents": [
+        "#4",
+        "#12"
+      ],
+      "downtime_total_h": 66.4,
+      "downtime_median_h": 33.2,
+      "downtime_max_h": 55.8,
+      "share_of_equipment_downtime_pct": 15.7,
+      "share_of_equipment_incidents_pct": 13.3,
+      "share_of_site_incidents_pct": 9.8,
+      "representation": "over-represented vs site",
+      "sample": "indicative only (fewer than 3 incidents)"
+    },
+    {
+      "weather_condition": "orage avec grêle",
+      "n_incidents": 3,
+      "n_severe": 0,
+      "incidents": [
+        "#8",
+        "#9",
+        "#14"
+      ],
+      "downtime_total_h": 45.7,
+      "downtime_median_h": 12.9,
+      "downtime_max_h": 22.7,
+      "share_of_equipment_downtime_pct": 10.8,
+      "share_of_equipment_incidents_pct": 20.0,
+      "share_of_site_incidents_pct": 12.1,
+      "representation": "over-represented vs site",
+      "sample": "ok"
+    },
+    {
+      "weather_condition": "vent fort / tempête",
+      "n_incidents": 2,
+      "n_severe": 0,
+      "incidents": [
+        "#2",
+        "#13"
+      ],
+      "downtime_total_h": 27.9,
+      "downtime_median_h": 13.9,
+      "downtime_max_h": 17.4,
+      "share_of_equipment_downtime_pct": 6.6,
+      "share_of_equipment_incidents_pct": 13.3,
+      "share_of_site_incidents_pct": 15.9,
+      "representation": "in line with site",
+      "sample": "indicative only (fewer than 3 incidents)"
+    },
+    {
+      "weather_condition": "pluie modérée",
+      "n_incidents": 1,
+      "n_severe": 0,
+      "incidents": [
+        "#15"
+      ],
+      "downtime_total_h": 24.6,
+      "downtime_median_h": 24.6,
+      "downtime_max_h": 24.6,
+      "share_of_equipment_downtime_pct": 5.8,
+      "share_of_equipment_incidents_pct": 6.7,
+      "share_of_site_incidents_pct": 18.9,
+      "representation": "under-represented vs site",
+      "sample": "indicative only (fewer than 3 incidents)"
+    },
+    {
+      "weather_condition": "temps calme",
+      "n_incidents": 1,
+      "n_severe": 0,
+      "incidents": [
+        "#3"
+      ],
+      "downtime_total_h": 15.5,
+      "downtime_median_h": 15.5,
+      "downtime_max_h": 15.5,
+      "share_of_equipment_downtime_pct": 3.7,
+      "share_of_equipment_incidents_pct": 6.7,
+      "share_of_site_incidents_pct": 17.4,
+      "representation": "under-represented vs site",
+      "sample": "indicative only (fewer than 3 incidents)"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "figure": "Failure modes vs weather condition",
+  "how_to_read": "Number of incidents per failure mode (rows) and weather condition. A weather condition absent from a failure mode's row never occurred with that failure mode.",
+  "matrix": {
+    "Baisse de rendement onduleur": {
+      "conditions nominales": 1
+    },
+    "Dommages superficiels modules PV": {
+      "vent fort / tempête": 4,
+      "orage avec grêle": 1
+    },
+    "Défaillance chaîne et boîtier de jonction": {
+      "conditions nominales": 1
+    },
+    "Dégradation et court-circuit câblage": {
+      "temps calme": 1,
+      "vent modéré": 1
+    },
+    "Incendie toiture et panneaux PV": {
+      "pluie modérée": 2
+    },
+    "Remplacement préventif connecteurs": {
+      "ciel dégagé": 1,
+      "vent modéré": 1
+    }
+  }
+}

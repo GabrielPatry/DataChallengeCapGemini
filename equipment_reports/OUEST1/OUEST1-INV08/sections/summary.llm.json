@@ -1,0 +1,11 @@
+{
+  "prompt_sha256": "fcb87531412d59ae92cfc1a67c01ddd17f39321040a91991ea750c885f553ed0",
+  "usage": {
+    "prompt_tokens": 1334,
+    "completion_tokens": 105
+  },
+  "answer": {
+    "title": "OUEST1-INV08: Fire and Cable Short-Circuit Failures",
+    "synopsis": "The PV inverter OUEST1-INV08 and its upstream DC field are prone to fire incidents and cable short circuits, which are the most costly failure modes at this site. These failure modes account for a significant portion of the equipment's incident costs and are prioritized as P1 due to their severity and financial impact. Initial actions should focus on thermography inspections and cable testing to prevent severe incidents and reduce risks."
+  }
+}

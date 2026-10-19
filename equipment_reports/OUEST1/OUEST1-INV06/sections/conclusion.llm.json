@@ -1,0 +1,10 @@
+{
+  "prompt_sha256": "34e1d33222f167bae09e37476ca688906b4c892ffecba1cdda5b2a5388f62978",
+  "usage": {
+    "prompt_tokens": 1241,
+    "completion_tokens": 69
+  },
+  "answer": {
+    "conclusion": "The main issue for OUEST1-INV06 is surface damages to PV modules, which account for the highest costs and recurrence. The first recommended actions include regular thermography inspections and electrical testing to detect damages early. Implementing these measures is expected to reduce failure recurrence and mitigate severe incidents, improving equipment reliability and safety."
+  }
+}

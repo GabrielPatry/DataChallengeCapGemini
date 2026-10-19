@@ -1,0 +1,47 @@
+{
+  "prompt_sha256": "66646572f9cffffea8bcb9382eedb4fa03736b332047a6a06fce26f2c8d35287",
+  "usage": {
+    "prompt_tokens": 1976,
+    "completion_tokens": 367
+  },
+  "answer": {
+    "actions": [
+      {
+        "action": "Perform thermography inspections to identify hot spots and potential thermal faults in the inverter and DC field.",
+        "type": "monitoring",
+        "target_failure_mode": "Incendie toiture et panneaux PV",
+        "expected_impact": "Early detection of thermal anomalies can prevent fire incidents and reduce the associated 25.3% of equipment cost."
+      },
+      {
+        "action": "Conduct IV-curve tracing and insulation resistance tests on the DC cables to detect degradation or short circuits.",
+        "type": "preventive",
+        "target_failure_mode": "Dégradation et court-circuit câblage",
+        "expected_impact": "Identifying cable issues can prevent recurrence and mitigate the 18.8% cost share of this failure mode."
+      },
+      {
+        "action": "Schedule regular torque checks on connectors to ensure proper tightening and prevent connection issues.",
+        "type": "preventive",
+        "target_failure_mode": "Remplacement préventif connecteurs",
+        "expected_impact": "Proper torque maintenance can reduce connector failures and the 8.1% cost share associated with this failure mode."
+      },
+      {
+        "action": "Inspect surge protection devices for proper operation and signs of damage, especially after storm events.",
+        "type": "monitoring",
+        "target_failure_mode": "Défaillance chaîne et boîtier de jonction",
+        "expected_impact": "Ensuring surge protection integrity can prevent damage to junction boxes and reduce severe incidents."
+      },
+      {
+        "action": "Implement a cleaning schedule for modules to minimize dirt accumulation and maintain optimal performance.",
+        "type": "preventive",
+        "target_failure_mode": "Salissure et nettoyage modules PV",
+        "expected_impact": "Regular cleaning can prevent performance degradation and avoid incidents related to dirt buildup."
+      },
+      {
+        "action": "Perform fire-risk inspections focusing on internal faults and material aging in the PV building support structure.",
+        "type": "monitoring",
+        "target_failure_mode": "Incendie bâtiment support PV",
+        "expected_impact": "Proactive fire risk management can prevent severe incidents and associated costs."
+      }
+    ]
+  }
+}

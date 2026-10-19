@@ -1,0 +1,11 @@
+## 7. Recommendations
+
+| Priority | Action | Type | Failure mode addressed | Expected impact |
+| --- | --- | --- | --- | --- |
+| P1 | Perform thermography inspections on the inverter to identify hot spots indicating potential failure modes. | monitoring | Baisse de rendement onduleur | Early detection of thermal issues could prevent severe incidents, which account for 21.6% of the equipment cost. |
+| P1 | Conduct IV-curve tracing and insulation resistance tests on the DC field upstream to detect degradation or short circuits. | preventive | Dégradation et court-circuit câblage | Identifying electrical degradation early can reduce the risk of severe incidents, which represent 23.8% of the equipment cost. |
+| P1 | Implement a regular connector torque check schedule for all DC field connections. | preventive | Dégradation et court-circuit câblage | Proper torque maintenance can mitigate connection failures, potentially reducing the recurrence of incidents. |
+| P1 | Inspect and upgrade surge protection devices in the DC field to prevent damage from electrical surges. | preventive | Incendie bâtiment support PV | Enhanced surge protection can lower the risk of fire incidents, which are responsible for 24.7% of the equipment cost and have recurred within 90 days. |
+| P1 | Establish a cleaning schedule for modules to reduce dirt accumulation, especially under conditions of 'ciel dégagé' and 'vent modéré'. | preventive | Salissure et nettoyage modules PV | Regular cleaning can decrease the likelihood of severe incidents, which account for 15.5% of the equipment cost and have a recurrence within 90 days. |
+| P1 | Maintain a stock of critical spare parts for the inverter and DC connectors to enable quick corrective actions. | spare parts | Baisse de rendement onduleur | Availability of spare parts can reduce downtime and mitigate the impact of failures related to inverter performance. |
+| P3 | Perform fire-risk inspections focusing on support structures and PV panels, especially during calm weather conditions. | monitoring | Incendie toiture et panneaux PV | Proactive inspections can prevent fire incidents, which have no severe incidents but account for 4.7% of the cost and have recurred once. |

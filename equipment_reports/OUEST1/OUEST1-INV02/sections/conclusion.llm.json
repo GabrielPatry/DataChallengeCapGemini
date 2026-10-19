@@ -1,0 +1,10 @@
+{
+  "prompt_sha256": "2fac1dce24d7efb3e71a2e6ad3be33033e12fff59f51165e5a34d9ecf4089e68",
+  "usage": {
+    "prompt_tokens": 1262,
+    "completion_tokens": 81
+  },
+  "answer": {
+    "conclusion": "The main issue with OUEST1-INV02 involves superficial damages to PV modules and wiring degradation, both of which have caused severe incidents. The first actions should focus on thermography inspections, IV-curve tracing, insulation resistance tests, and cleaning schedules to identify and mitigate these failure modes. Implementing these measures is expected to reduce the risk of severe incidents and improve equipment reliability."
+  }
+}

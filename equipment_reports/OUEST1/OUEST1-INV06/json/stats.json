@@ -1,0 +1,840 @@
+{
+  "equipment": {
+    "equipment_id": "OUEST1-INV06",
+    "site": "Centrale PV Ouest-1",
+    "asset_type": "PV inverter and the DC field upstream of it",
+    "equipment_priority": "P1",
+    "risk_level": "critical",
+    "criticality_score_within_site": 99.0,
+    "criticality_score_vs_fleet": 99.2,
+    "rank_within_site": 1,
+    "n_equipment_on_site": 10,
+    "why_selected": "criticality score 99.0 (at or above the threshold of 75) against the other equipment of the site and 99.2 (at or above the threshold of 75) against the whole solar fleet"
+  },
+  "period": {
+    "first_record": "2023-02-25",
+    "last_record": "2025-12-26"
+  },
+  "comparison_with_site_median": {
+    "incidents_all_severities": {
+      "this_equipment": 37,
+      "site_median_equipment": 31.5,
+      "ratio_to_site_median": 1.17
+    },
+    "severe_incidents": {
+      "this_equipment": 9,
+      "site_median_equipment": 4.5,
+      "ratio_to_site_median": 2.0
+    },
+    "cost_all_severities_eur": {
+      "this_equipment": 403752,
+      "site_median_equipment": 212067,
+      "ratio_to_site_median": 1.9
+    },
+    "downtime_all_severities_h": {
+      "this_equipment": 826.3,
+      "site_median_equipment": 473.8,
+      "ratio_to_site_median": 1.74
+    }
+  },
+  "key_figures": {
+    "n_incidents": 20,
+    "n_moderate": 11,
+    "n_severe": 9,
+    "severe_share_of_incidents_pct": 45.0,
+    "cost_total_eur": 388974,
+    "cost_mean_eur": 19449,
+    "cost_median_eur": 5515,
+    "severe_share_of_cost_pct": 89.2,
+    "downtime_total_h": 762.2,
+    "downtime_mean_h": 38.1,
+    "mean_days_between_incidents": 50,
+    "first_incident": "#1 on 2023-05-18",
+    "last_incident": "#20 on 2025-12-26"
+  },
+  "yearly_trend": {
+    "by_year": [
+      {
+        "year": 2023,
+        "n_incidents": 6,
+        "n_severe": 3,
+        "cost_eur": 98215,
+        "downtime_h": 208.2,
+        "cost_change_vs_previous_year_pct": null,
+        "incident_count_change_vs_previous_year": null
+      },
+      {
+        "year": 2024,
+        "n_incidents": 5,
+        "n_severe": 3,
+        "cost_eur": 140685,
+        "downtime_h": 242.3,
+        "cost_change_vs_previous_year_pct": 43.2,
+        "incident_count_change_vs_previous_year": -1
+      },
+      {
+        "year": 2025,
+        "n_incidents": 9,
+        "n_severe": 3,
+        "cost_eur": 150075,
+        "downtime_h": 311.7,
+        "cost_change_vs_previous_year_pct": 6.7,
+        "incident_count_change_vs_previous_year": 4
+      }
+    ],
+    "overall": {
+      "first_year": 2023,
+      "last_year": 2025,
+      "cost_change_first_to_last_year_pct": 52.8,
+      "label": "increasing"
+    }
+  },
+  "seasonality": [
+    {
+      "season": "winter",
+      "n_incidents": 5,
+      "n_severe": 3,
+      "cost_eur": 93060,
+      "downtime_h": 179.4,
+      "sample": "ok"
+    },
+    {
+      "season": "spring",
+      "n_incidents": 4,
+      "n_severe": 2,
+      "cost_eur": 90919,
+      "downtime_h": 179.9,
+      "sample": "ok"
+    },
+    {
+      "season": "summer",
+      "n_incidents": 7,
+      "n_severe": 1,
+      "cost_eur": 58089,
+      "downtime_h": 138.3,
+      "sample": "ok"
+    },
+    {
+      "season": "autumn",
+      "n_incidents": 4,
+      "n_severe": 3,
+      "cost_eur": 146907,
+      "downtime_h": 264.6,
+      "sample": "ok"
+    }
+  ],
+  "most_costly_incidents": {
+    "incidents": [
+      {
+        "ref": "#11",
+        "date": "2024-11-26",
+        "severity": "sévère",
+        "failure_mode": "Dommages superficiels modules PV",
+        "weather_condition": "vent fort / tempête",
+        "cost_eur": 60221,
+        "downtime_h": 98.3,
+        "share_of_total_cost_pct": 15.5
+      },
+      {
+        "ref": "#4",
+        "date": "2023-10-24",
+        "severity": "sévère",
+        "failure_mode": "Incendie toiture et panneaux PV",
+        "weather_condition": "conditions nominales",
+        "cost_eur": 43919,
+        "downtime_h": 86.9,
+        "share_of_total_cost_pct": 11.3
+      },
+      {
+        "ref": "#12",
+        "date": "2025-01-10",
+        "severity": "sévère",
+        "failure_mode": "Dommages superficiels modules PV",
+        "weather_condition": "vent fort / tempête",
+        "cost_eur": 41211,
+        "downtime_h": 73.5,
+        "share_of_total_cost_pct": 10.6
+      }
+    ],
+    "top3_combined_cost_eur": 145351,
+    "top3_combined_share_of_total_cost_pct": 37.4
+  },
+  "close_sequences_within_30_days": [
+    {
+      "incidents": [
+        "#2",
+        "#3"
+      ],
+      "from": "2023-07-01",
+      "to": "2023-07-02",
+      "span_days": 1,
+      "n_severe": 1,
+      "combined_cost_eur": 38096,
+      "failure_modes": [
+        "Défaillance chaîne et boîtier de jonction",
+        "Incendie toiture et panneaux PV"
+      ]
+    },
+    {
+      "incidents": [
+        "#4",
+        "#5",
+        "#6"
+      ],
+      "from": "2023-10-24",
+      "to": "2023-12-08",
+      "span_days": 45,
+      "n_severe": 2,
+      "combined_cost_eur": 54821,
+      "failure_modes": [
+        "Dommages superficiels modules PV",
+        "Incendie toiture et panneaux PV"
+      ]
+    },
+    {
+      "incidents": [
+        "#14",
+        "#15"
+      ],
+      "from": "2025-04-03",
+      "to": "2025-04-30",
+      "span_days": 27,
+      "n_severe": 1,
+      "combined_cost_eur": 44483,
+      "failure_modes": [
+        "Dommages superficiels modules PV",
+        "Dégradation et court-circuit câblage"
+      ]
+    },
+    {
+      "incidents": [
+        "#17",
+        "#18",
+        "#19"
+      ],
+      "from": "2025-08-10",
+      "to": "2025-09-02",
+      "span_days": 23,
+      "n_severe": 1,
+      "combined_cost_eur": 48938,
+      "failure_modes": [
+        "Dommages superficiels modules PV",
+        "Dégradation et court-circuit câblage"
+      ]
+    }
+  ],
+  "failure_modes": [
+    {
+      "failure_mode": "Dommages superficiels modules PV",
+      "recommendation_priority": "P1",
+      "priority_reason": "6 severe incident(s) + 59.9% of the equipment cost + 4 recurrence(s) within 90 days",
+      "n_incidents": 8,
+      "n_moderate": 2,
+      "n_severe": 6,
+      "sample": "ok",
+      "cost_total_eur": 232939,
+      "cost_mean_eur": 29117,
+      "cost_share_pct": 59.9,
+      "downtime_total_h": 428.9,
+      "first_date": "2023-12-08",
+      "last_date": "2025-09-02",
+      "median_days_between_recurrences": 83,
+      "recurrences_within_90_days": 4,
+      "share_of_equipment_incidents_pct": 40.0,
+      "share_of_site_incidents_pct": 28.0,
+      "representation": "over-represented vs site",
+      "weather_counts": {
+        "vent fort / tempête": 4,
+        "orage avec grêle": 4
+      },
+      "dominant_weather": [
+        "vent fort / tempête",
+        "orage avec grêle"
+      ],
+      "dominant_weather_share_pct": 50.0,
+      "incidents": [
+        {
+          "ref": "#6",
+          "date": "2023-12-08",
+          "severity": "sévère",
+          "cost_eur": 9267,
+          "downtime_h": 18.8,
+          "weather_condition": "orage avec grêle"
+        },
+        {
+          "ref": "#7",
+          "date": "2024-02-14",
+          "severity": "sévère",
+          "cost_eur": 32669,
+          "downtime_h": 57.5,
+          "weather_condition": "vent fort / tempête"
+        },
+        {
+          "ref": "#9",
+          "date": "2024-06-19",
+          "severity": "modérée",
+          "cost_eur": 2359,
+          "downtime_h": 7.0,
+          "weather_condition": "orage avec grêle"
+        },
+        {
+          "ref": "#11",
+          "date": "2024-11-26",
+          "severity": "sévère",
+          "cost_eur": 60221,
+          "downtime_h": 98.3,
+          "weather_condition": "vent fort / tempête"
+        },
+        {
+          "ref": "#12",
+          "date": "2025-01-10",
+          "severity": "sévère",
+          "cost_eur": 41211,
+          "downtime_h": 73.5,
+          "weather_condition": "vent fort / tempête"
+        },
+        {
+          "ref": "#14",
+          "date": "2025-04-03",
+          "severity": "sévère",
+          "cost_eur": 40943,
+          "downtime_h": 86.2,
+          "weather_condition": "vent fort / tempête"
+        },
+        {
+          "ref": "#17",
+          "date": "2025-08-10",
+          "severity": "modérée",
+          "cost_eur": 5137,
+          "downtime_h": 13.0,
+          "weather_condition": "orage avec grêle"
+        },
+        {
+          "ref": "#19",
+          "date": "2025-09-02",
+          "severity": "sévère",
+          "cost_eur": 41132,
+          "downtime_h": 74.6,
+          "weather_condition": "orage avec grêle"
+        }
+      ]
+    },
+    {
+      "failure_mode": "Défaillance chaîne et boîtier de jonction",
+      "recommendation_priority": "P2",
+      "priority_reason": "2 severe incident(s), 19.9% of the cost, no recurrence within 90 days",
+      "n_incidents": 2,
+      "n_moderate": 0,
+      "n_severe": 2,
+      "sample": "indicative only (fewer than 3 incidents)",
+      "cost_total_eur": 77502,
+      "cost_mean_eur": 38751,
+      "cost_share_pct": 19.9,
+      "downtime_total_h": 145.5,
+      "first_date": "2023-07-02",
+      "last_date": "2024-05-09",
+      "median_days_between_recurrences": 312,
+      "recurrences_within_90_days": 0,
+      "share_of_equipment_incidents_pct": 10.0,
+      "share_of_site_incidents_pct": 7.6,
+      "representation": "over-represented vs site",
+      "weather_counts": {
+        "pluie modérée": 2
+      },
+      "dominant_weather": [
+        "pluie modérée"
+      ],
+      "dominant_weather_share_pct": 100.0,
+      "incidents": [
+        {
+          "ref": "#3",
+          "date": "2023-07-02",
+          "severity": "sévère",
+          "cost_eur": 36364,
+          "downtime_h": 78.0,
+          "weather_condition": "pluie modérée"
+        },
+        {
+          "ref": "#8",
+          "date": "2024-05-09",
+          "severity": "sévère",
+          "cost_eur": 41138,
+          "downtime_h": 67.5,
+          "weather_condition": "pluie modérée"
+        }
+      ]
+    },
+    {
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "recommendation_priority": "P1",
+      "priority_reason": "1 severe incident(s) + 1 recurrence(s) within 90 days",
+      "n_incidents": 5,
+      "n_moderate": 4,
+      "n_severe": 1,
+      "sample": "ok",
+      "cost_total_eur": 55997,
+      "cost_mean_eur": 11199,
+      "cost_share_pct": 14.4,
+      "downtime_total_h": 122.0,
+      "first_date": "2023-07-01",
+      "last_date": "2025-02-17",
+      "median_days_between_recurrences": 148,
+      "recurrences_within_90_days": 1,
+      "share_of_equipment_incidents_pct": 25.0,
+      "share_of_site_incidents_pct": 15.9,
+      "representation": "over-represented vs site",
+      "weather_counts": {
+        "conditions nominales": 1,
+        "temps calme": 1,
+        "pluie modérée": 3
+      },
+      "dominant_weather": [
+        "pluie modérée"
+      ],
+      "dominant_weather_share_pct": 60.0,
+      "incidents": [
+        {
+          "ref": "#2",
+          "date": "2023-07-01",
+          "severity": "modérée",
+          "cost_eur": 1733,
+          "downtime_h": 5.2,
+          "weather_condition": "pluie modérée"
+        },
+        {
+          "ref": "#4",
+          "date": "2023-10-24",
+          "severity": "sévère",
+          "cost_eur": 43919,
+          "downtime_h": 86.9,
+          "weather_condition": "conditions nominales"
+        },
+        {
+          "ref": "#5",
+          "date": "2023-11-19",
+          "severity": "modérée",
+          "cost_eur": 1635,
+          "downtime_h": 4.8,
+          "weather_condition": "pluie modérée"
+        },
+        {
+          "ref": "#10",
+          "date": "2024-08-21",
+          "severity": "modérée",
+          "cost_eur": 4298,
+          "downtime_h": 12.0,
+          "weather_condition": "pluie modérée"
+        },
+        {
+          "ref": "#13",
+          "date": "2025-02-17",
+          "severity": "modérée",
+          "cost_eur": 4412,
+          "downtime_h": 13.1,
+          "weather_condition": "temps calme"
+        }
+      ]
+    },
+    {
+      "failure_mode": "Dégradation et court-circuit câblage",
+      "recommendation_priority": "P3",
+      "priority_reason": "no severe incident and 4.4% of the cost",
+      "n_incidents": 4,
+      "n_moderate": 4,
+      "n_severe": 0,
+      "sample": "ok",
+      "cost_total_eur": 17007,
+      "cost_mean_eur": 4252,
+      "cost_share_pct": 4.4,
+      "downtime_total_h": 51.4,
+      "first_date": "2023-05-18",
+      "last_date": "2025-12-26",
+      "median_days_between_recurrences": 131,
+      "recurrences_within_90_days": 0,
+      "share_of_equipment_incidents_pct": 20.0,
+      "share_of_site_incidents_pct": 14.4,
+      "representation": "over-represented vs site",
+      "weather_counts": {
+        "ciel dégagé": 1,
+        "conditions nominales": 1,
+        "temps calme": 1,
+        "vent modéré": 1
+      },
+      "dominant_weather": [
+        "ciel dégagé",
+        "conditions nominales",
+        "temps calme",
+        "vent modéré"
+      ],
+      "dominant_weather_share_pct": 25.0,
+      "incidents": [
+        {
+          "ref": "#1",
+          "date": "2023-05-18",
+          "severity": "modérée",
+          "cost_eur": 5297,
+          "downtime_h": 14.5,
+          "weather_condition": "vent modéré"
+        },
+        {
+          "ref": "#15",
+          "date": "2025-04-30",
+          "severity": "modérée",
+          "cost_eur": 3540,
+          "downtime_h": 11.7,
+          "weather_condition": "temps calme"
+        },
+        {
+          "ref": "#18",
+          "date": "2025-08-17",
+          "severity": "modérée",
+          "cost_eur": 2669,
+          "downtime_h": 8.7,
+          "weather_condition": "conditions nominales"
+        },
+        {
+          "ref": "#20",
+          "date": "2025-12-26",
+          "severity": "modérée",
+          "cost_eur": 5501,
+          "downtime_h": 16.5,
+          "weather_condition": "ciel dégagé"
+        }
+      ]
+    },
+    {
+      "failure_mode": "Remplacement préventif connecteurs",
+      "recommendation_priority": "P3",
+      "priority_reason": "no severe incident and 1.4% of the cost",
+      "n_incidents": 1,
+      "n_moderate": 1,
+      "n_severe": 0,
+      "sample": "indicative only (fewer than 3 incidents)",
+      "cost_total_eur": 5529,
+      "cost_mean_eur": 5529,
+      "cost_share_pct": 1.4,
+      "downtime_total_h": 14.4,
+      "first_date": "2025-06-15",
+      "last_date": "2025-06-15",
+      "median_days_between_recurrences": null,
+      "recurrences_within_90_days": 0,
+      "share_of_equipment_incidents_pct": 5.0,
+      "share_of_site_incidents_pct": 11.4,
+      "representation": "under-represented vs site",
+      "weather_counts": {
+        "ciel dégagé": 1
+      },
+      "dominant_weather": [
+        "ciel dégagé"
+      ],
+      "dominant_weather_share_pct": 100.0,
+      "incidents": [
+        {
+          "ref": "#16",
+          "date": "2025-06-15",
+          "severity": "modérée",
+          "cost_eur": 5529,
+          "downtime_h": 14.4,
+          "weather_condition": "ciel dégagé"
+        }
+      ]
+    }
+  ],
+  "register": [
+    {
+      "ref": "#1",
+      "date": "2023-05-18",
+      "severity": "modérée",
+      "failure_mode": "Dégradation et court-circuit câblage",
+      "cost_eur": 5297,
+      "downtime_h": 14.5,
+      "weather_condition": "vent modéré"
+    },
+    {
+      "ref": "#2",
+      "date": "2023-07-01",
+      "severity": "modérée",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 1733,
+      "downtime_h": 5.2,
+      "weather_condition": "pluie modérée"
+    },
+    {
+      "ref": "#3",
+      "date": "2023-07-02",
+      "severity": "sévère",
+      "failure_mode": "Défaillance chaîne et boîtier de jonction",
+      "cost_eur": 36364,
+      "downtime_h": 78.0,
+      "weather_condition": "pluie modérée"
+    },
+    {
+      "ref": "#4",
+      "date": "2023-10-24",
+      "severity": "sévère",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 43919,
+      "downtime_h": 86.9,
+      "weather_condition": "conditions nominales"
+    },
+    {
+      "ref": "#5",
+      "date": "2023-11-19",
+      "severity": "modérée",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 1635,
+      "downtime_h": 4.8,
+      "weather_condition": "pluie modérée"
+    },
+    {
+      "ref": "#6",
+      "date": "2023-12-08",
+      "severity": "sévère",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 9267,
+      "downtime_h": 18.8,
+      "weather_condition": "orage avec grêle"
+    },
+    {
+      "ref": "#7",
+      "date": "2024-02-14",
+      "severity": "sévère",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 32669,
+      "downtime_h": 57.5,
+      "weather_condition": "vent fort / tempête"
+    },
+    {
+      "ref": "#8",
+      "date": "2024-05-09",
+      "severity": "sévère",
+      "failure_mode": "Défaillance chaîne et boîtier de jonction",
+      "cost_eur": 41138,
+      "downtime_h": 67.5,
+      "weather_condition": "pluie modérée"
+    },
+    {
+      "ref": "#9",
+      "date": "2024-06-19",
+      "severity": "modérée",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 2359,
+      "downtime_h": 7.0,
+      "weather_condition": "orage avec grêle"
+    },
+    {
+      "ref": "#10",
+      "date": "2024-08-21",
+      "severity": "modérée",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 4298,
+      "downtime_h": 12.0,
+      "weather_condition": "pluie modérée"
+    },
+    {
+      "ref": "#11",
+      "date": "2024-11-26",
+      "severity": "sévère",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 60221,
+      "downtime_h": 98.3,
+      "weather_condition": "vent fort / tempête"
+    },
+    {
+      "ref": "#12",
+      "date": "2025-01-10",
+      "severity": "sévère",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 41211,
+      "downtime_h": 73.5,
+      "weather_condition": "vent fort / tempête"
+    },
+    {
+      "ref": "#13",
+      "date": "2025-02-17",
+      "severity": "modérée",
+      "failure_mode": "Incendie toiture et panneaux PV",
+      "cost_eur": 4412,
+      "downtime_h": 13.1,
+      "weather_condition": "temps calme"
+    },
+    {
+      "ref": "#14",
+      "date": "2025-04-03",
+      "severity": "sévère",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 40943,
+      "downtime_h": 86.2,
+      "weather_condition": "vent fort / tempête"
+    },
+    {
+      "ref": "#15",
+      "date": "2025-04-30",
+      "severity": "modérée",
+      "failure_mode": "Dégradation et court-circuit câblage",
+      "cost_eur": 3540,
+      "downtime_h": 11.7,
+      "weather_condition": "temps calme"
+    },
+    {
+      "ref": "#16",
+      "date": "2025-06-15",
+      "severity": "modérée",
+      "failure_mode": "Remplacement préventif connecteurs",
+      "cost_eur": 5529,
+      "downtime_h": 14.4,
+      "weather_condition": "ciel dégagé"
+    },
+    {
+      "ref": "#17",
+      "date": "2025-08-10",
+      "severity": "modérée",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 5137,
+      "downtime_h": 13.0,
+      "weather_condition": "orage avec grêle"
+    },
+    {
+      "ref": "#18",
+      "date": "2025-08-17",
+      "severity": "modérée",
+      "failure_mode": "Dégradation et court-circuit câblage",
+      "cost_eur": 2669,
+      "downtime_h": 8.7,
+      "weather_condition": "conditions nominales"
+    },
+    {
+      "ref": "#19",
+      "date": "2025-09-02",
+      "severity": "sévère",
+      "failure_mode": "Dommages superficiels modules PV",
+      "cost_eur": 41132,
+      "downtime_h": 74.6,
+      "weather_condition": "orage avec grêle"
+    },
+    {
+      "ref": "#20",
+      "date": "2025-12-26",
+      "severity": "modérée",
+      "failure_mode": "Dégradation et court-circuit câblage",
+      "cost_eur": 5501,
+      "downtime_h": 16.5,
+      "weather_condition": "ciel dégagé"
+    }
+  ],
+  "facts": {
+    "benchmark": [
+      "Incidents of all severities: 37 on this equipment vs 31.5 for the median equipment of the site (ratio ×1.17, ABOVE the site median).",
+      "Severe incidents: 9 on this equipment vs 4.5 for the median equipment of the site (ratio ×2.0, ABOVE the site median).",
+      "Estimated cost of all incidents: 403 752 EUR on this equipment vs 212 067 EUR for the median equipment of the site (ratio ×1.9, ABOVE the site median).",
+      "Downtime of all incidents: 826.3 h on this equipment vs 473.8 h for the median equipment of the site (ratio ×1.74, ABOVE the site median)."
+    ],
+    "cost": [
+      "Moderate and severe incidents: 20 (9 severe), 388 974 EUR in total; severe incidents account for 89.2% of this cost.",
+      "The most costly single incident is #11 (Dommages superficiels modules PV, sévère, 2024-11-26): 60 221 EUR, 15.5% of the cost of moderate and severe incidents.",
+      "The most costly failure mode is Dommages superficiels modules PV: 232 939 EUR over 8 incident(s), 59.9% of the cost."
+    ],
+    "trend": [
+      "2023: 6 incident(s) (3 severe), 98 215 EUR.",
+      "2024: 5 incident(s) (3 severe), 140 685 EUR (+43.2% vs previous year).",
+      "2025: 9 incident(s) (3 severe), 150 075 EUR (+6.7% vs previous year).",
+      "From 2023 to 2025 the cost changed by +52.8% (trend: increasing)."
+    ],
+    "weather": [
+      "Most downtime occurs under 'vent fort / tempête': 315.5 h over 4 incident(s), 41.4% of the downtime (in line with site).",
+      "'pluie modérée' is over-represented vs site: 25.0% of the incidents of this equipment vs 18.9% on the site.",
+      "'orage avec grêle' is over-represented vs site: 20.0% of the incidents of this equipment vs 12.1% on the site.",
+      "'temps calme' is under-represented vs site: 10.0% of the incidents of this equipment vs 17.4% on the site (indicative only).",
+      "'vent modéré' is under-represented vs site: 5.0% of the incidents of this equipment vs 9.8% on the site (indicative only)."
+    ],
+    "priorities": [
+      "Dommages superficiels modules PV: priority P1 (6 severe incident(s) + 59.9% of the equipment cost + 4 recurrence(s) within 90 days).",
+      "Défaillance chaîne et boîtier de jonction: priority P2 (2 severe incident(s), 19.9% of the cost, no recurrence within 90 days).",
+      "Incendie toiture et panneaux PV: priority P1 (1 severe incident(s) + 1 recurrence(s) within 90 days).",
+      "Dégradation et court-circuit câblage: priority P3 (no severe incident and 4.4% of the cost).",
+      "Remplacement préventif connecteurs: priority P3 (no severe incident and 1.4% of the cost)."
+    ]
+  },
+  "incident_mapping": [
+    {
+      "ref": "#1",
+      "incident_id": 948
+    },
+    {
+      "ref": "#2",
+      "incident_id": 424
+    },
+    {
+      "ref": "#3",
+      "incident_id": 63
+    },
+    {
+      "ref": "#4",
+      "incident_id": 863
+    },
+    {
+      "ref": "#5",
+      "incident_id": 164
+    },
+    {
+      "ref": "#6",
+      "incident_id": 127
+    },
+    {
+      "ref": "#7",
+      "incident_id": 794
+    },
+    {
+      "ref": "#8",
+      "incident_id": 574
+    },
+    {
+      "ref": "#9",
+      "incident_id": 1304
+    },
+    {
+      "ref": "#10",
+      "incident_id": 779
+    },
+    {
+      "ref": "#11",
+      "incident_id": 41
+    },
+    {
+      "ref": "#12",
+      "incident_id": 1210
+    },
+    {
+      "ref": "#13",
+      "incident_id": 1533
+    },
+    {
+      "ref": "#14",
+      "incident_id": 1418
+    },
+    {
+      "ref": "#15",
+      "incident_id": 839
+    },
+    {
+      "ref": "#16",
+      "incident_id": 1453
+    },
+    {
+      "ref": "#17",
+      "incident_id": 548
+    },
+    {
+      "ref": "#18",
+      "incident_id": 1228
+    },
+    {
+      "ref": "#19",
+      "incident_id": 967
+    },
+    {
+      "ref": "#20",
+      "incident_id": 680
+    }
+  ]
+}

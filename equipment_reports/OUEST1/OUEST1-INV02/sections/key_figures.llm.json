@@ -1,0 +1,10 @@
+{
+  "prompt_sha256": "566de0e72abb93a0ebbc30e21c227a7dee0a20fe1e177322441482451beee5f1",
+  "usage": {
+    "prompt_tokens": 1353,
+    "completion_tokens": 145
+  },
+  "answer": {
+    "reading": "This equipment has a slightly higher number of severe incidents compared to the site median, with a ratio of 1.11, and its total incident cost is also above the median with a ratio of 1.13. It is in line with the site median for overall incidents and downtime, with ratios of 0.92 and 1.06 respectively. The equipment was selected because its criticality score of 52.9 is below the threshold of 75, but its high risk level and criticality score of 85.1 against the entire fleet highlight its importance. The majority of the incident cost (85.4%) is concentrated on severe incidents, indicating a high impact of these failures."
+  }
+}
