@@ -69,6 +69,8 @@ def convert_markdown_to_pdf(markdown_path: Path, pdf_path: Path | None = None) -
             str(markdown_path),
             "--pdf-engine",
             PDF_ENGINE,
+            "-V",
+            "geometry:margin=2.5cm",
             "-o",
             str(pdf_path),
         ],
