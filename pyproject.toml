@@ -30,6 +30,7 @@ dependencies = [
 dc = "datachallengecapgemini:main"
 datachallengecapgemini = "datachallengecapgemini:main"
 datachallengecapgemini-preprocess = "datachallengecapgemini.preprocessing:main"
+datachallengecapgemini-clustering = "datachallengecapgemini.clustering:main"
 
 [build-system]
 requires = ["uv_build>=0.12.11,<0.13.0"]
