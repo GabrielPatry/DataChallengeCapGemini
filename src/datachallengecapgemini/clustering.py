@@ -21,6 +21,7 @@ import json
 import os
 import re
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -44,9 +45,21 @@ FRENCH_STOPWORDS = [
     "afin", "plus", "après", "avant",
 ]
 REQUIRED_COLUMNS = {"asset_type", "text"}
+# Libellés bruts des PDF -> type d'actif, en minuscules et sans accents (un CSV
+# fusionné avant la correction de merge_csv peut encore les contenir)
+ASSET_TYPE_ALIASES = {"centrale photovoltaique": "solar", "parc eolien": "wind"}
 CHAT_INPUT_PRICE_USD_PER_MILLION = 0.10
 CHAT_CACHED_INPUT_PRICE_USD_PER_MILLION = 0.025
 CHAT_OUTPUT_PRICE_USD_PER_MILLION = 0.40
+
+
+def _normalise_asset_type(value: Any) -> Any:
+    """Ramène un libellé brut de type d'actif à ``solar`` / ``wind``."""
+    if not isinstance(value, str):
+        return value
+    decomposed = unicodedata.normalize("NFKD", value.strip().lower())
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return ASSET_TYPE_ALIASES.get(plain, value)
 
 
 def _load_incidents(csv_path: Path) -> pd.DataFrame:
@@ -62,6 +75,9 @@ def _load_incidents(csv_path: Path) -> pd.DataFrame:
             f"{sorted(REQUIRED_COLUMNS)}. Colonnes manquantes : "
             f"{sorted(missing_columns)}."
         )
+
+    # "Centrale photovoltaïque", "Centrale photovoltaique"… -> "solar"
+    incidents["asset_type"] = incidents["asset_type"].map(_normalise_asset_type)
 
     # Comme dans le notebook, seules les lignes avec un texte extrait sont gardées.
     incidents = incidents[incidents["text"].notnull()].reset_index(drop=True)
