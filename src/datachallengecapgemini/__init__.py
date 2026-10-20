@@ -13,11 +13,19 @@ from datachallengecapgemini.preprocessing import (
     parse_ocr_directory,
     parse_ocr_json,
 )
+from datachallengecapgemini.report_factory import (
+    ReportFactory,
+    SolarReportFactory,
+    WindReportFactory,
+)
 
 __all__ = [
     "PlotFactory",
+    "ReportFactory",
     "SolarPlotFactory",
+    "SolarReportFactory",
     "WindPlotFactory",
+    "WindReportFactory",
     "ocr_directory",
     "ocr_pdf",
     "parse_ocr_directory",
@@ -27,6 +35,11 @@ __all__ = [
 
 def main() -> None:
     """CLI entry point — ``uv run datachallengecapgemini``."""
+    from datachallengecapgemini.clustering import (
+        ClusteringArgs,
+        add_clustering_arguments,
+        run_clustering,
+    )
     from datachallengecapgemini.pdf_export import (
         add_pdf_arguments,
         run_pdf_export,
@@ -58,6 +71,9 @@ def main() -> None:
     add_preprocessing_arguments(
         parser
     )  # adding preprocessing specific aguments to the preprocessing specific parser
+    add_clustering_arguments(
+        parser
+    )  # adding clustering specific arguments to the pipeline parser
     add_plotting_arguments(
         parser
     )  # adding plotting specific arguments to the pipeline parser
@@ -86,8 +102,29 @@ def main() -> None:
 
     else:
         print(
-            "Skipping preprocessing, assuming the clusterised solar and wind "
+            "Skipping preprocessing, assuming the merged incidents CSV "
+            f"already exists at {args.clustering_input_csv}..."
+        )
+
+    if args.skip_clustering:
+        print(
+            "Skipping clustering, assuming the clusterised solar and wind "
             f"CSVs already exist at {args.solar_csv} and {args.wind_csv}..."
+        )
+    else:
+        print()
+        print("=" * 60)
+        print("Clustering: topic modeling of solar and wind incidents")
+        print("=" * 60)
+        run_clustering(
+            ClusteringArgs(
+                input_csv=args.clustering_input_csv,
+                solar_output_csv=args.solar_csv,
+                wind_output_csv=args.wind_csv,
+                min_cluster_size_start=args.min_cluster_size_start,
+                max_cluster_size_fraction=args.max_cluster_size_fraction,
+                min_cluster_size_step=args.min_cluster_size_step,
+            )
         )
 
     print()
