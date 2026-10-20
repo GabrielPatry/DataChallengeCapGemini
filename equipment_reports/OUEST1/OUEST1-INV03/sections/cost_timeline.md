@@ -2,7 +2,7 @@
 
 ![Cost timeline](../figures/cost_timeline.png)
 
-*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of failure modes, marker shape = failure mode; the three most costly incidents are labelled.*
+*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of failure modes, marker shape = failure mode, grey cross = unclassified; the three most costly incidents are labelled.*
 
 | Year | Incidents | Severe | Cost (EUR) | Cost vs previous year | Downtime (h) |
 | --- | --- | --- | --- | --- | --- |

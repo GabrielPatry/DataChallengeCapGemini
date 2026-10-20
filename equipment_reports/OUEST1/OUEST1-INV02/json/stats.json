@@ -490,6 +490,12 @@
       ]
     }
   ],
+  "unclassified_incidents": {
+    "n_incidents": 0,
+    "incidents": [],
+    "cost_eur": 0,
+    "cost_share_pct": 0.0
+  },
   "register": [
     {
       "ref": "#1",

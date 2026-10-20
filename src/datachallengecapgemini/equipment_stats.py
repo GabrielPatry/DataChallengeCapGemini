@@ -17,6 +17,10 @@ they receive these statistics and turn them into prose.
   sections, plus ready-made sentences (``facts``) for the figures the model
   tends to misread (most costly incident vs most costly failure mode, ratios,
   year-on-year changes).
+
+Incidents of the clustering's noise cluster (``C_NOISE``) are relabelled
+``UNCLASSIFIED``: they count in every total, timeline and register, but not in
+the failure-mode analysis (failure modes, priorities, weather matrix).
 """
 
 import math
@@ -80,6 +84,11 @@ SEASONS: dict[int, str] = {
     11: "autumn",
 }
 
+# Noise cluster of the clustering step (incidents without a clear failure
+# mode) and the label they get in the equipment reports
+NOISE_CLUSTER_CODE = "C_NOISE"
+UNCLASSIFIED = "Unclassified (no failure mode)"
+
 # Priority of a recommendation = priority of the failure mode it addresses
 PRIORITY_RULES: dict[str, str] = {
     "P1": (
@@ -96,9 +105,17 @@ PRIORITY_RULES: dict[str, str] = {
 
 
 def load_solar_incidents(csv_path: Path) -> pd.DataFrame:
-    """Load the clusterised solar incidents CSV, with parsed dates."""
+    """Load the clusterised solar incidents CSV, with parsed dates.
+
+    Noise-cluster incidents and incidents without a cluster are relabelled
+    ``UNCLASSIFIED``.
+    """
     df = pd.read_csv(csv_path)
     df["date"] = pd.to_datetime(df["date"])
+    noise = df["cluster_name"].isna()
+    if "cluster_code" in df.columns:
+        noise |= df["cluster_code"] == NOISE_CLUSTER_CODE
+    df.loc[noise, "cluster_name"] = UNCLASSIFIED
     return df.sort_values(["site", "equipment_id", "date"]).reset_index(drop=True)
 
 
@@ -245,7 +262,19 @@ def number_incidents(df: pd.DataFrame, equipment_id: str) -> pd.DataFrame:
     d["days_since_previous_same_mode"] = (
         d.groupby("cluster_name")["date"].diff().dt.days
     )
+    # Unclassified incidents do not share a failure mode with each other
+    d.loc[d["cluster_name"] == UNCLASSIFIED, "days_since_previous_same_mode"] = np.nan
     return d
+
+
+def classified(d: pd.DataFrame) -> pd.DataFrame:
+    """Incidents of *d* that belong to a failure mode (``UNCLASSIFIED`` removed)."""
+    return d[d["cluster_name"] != UNCLASSIFIED]
+
+
+def has_failure_modes(df: pd.DataFrame, equipment_id: str) -> bool:
+    """Whether the equipment has a moderate or severe incident with a failure mode."""
+    return not classified(number_incidents(df, equipment_id)).empty
 
 
 def site_focus(df: pd.DataFrame, site: str) -> pd.DataFrame:
@@ -308,7 +337,8 @@ def ordered_weather(conditions) -> list[str]:
 
 
 def failure_mode_weather_matrix(d: pd.DataFrame) -> dict[str, dict[str, int]]:
-    """``{failure_mode: {weather: n_incidents}}``, empty cells omitted."""
+    """``{failure_mode: {weather: n_incidents}}``, empty cells and unclassified incidents omitted."""
+    d = classified(d)
     ct = pd.crosstab(d["cluster_name"], d["weather_condition"])
     ct = ct[ordered_weather(ct.columns)]
     return {
@@ -422,7 +452,9 @@ def _failure_modes(d: pd.DataFrame, focus_site: pd.DataFrame) -> list[dict]:
     site_share = focus_site["cluster_name"].value_counts(normalize=True)
     weather = failure_mode_weather_matrix(d)
     modes = []
-    for mode, g in d.groupby("cluster_name"):
+    # Shares stay relative to every incident of the equipment (d), but only
+    # classified incidents form failure modes
+    for mode, g in classified(d).groupby("cluster_name"):
         gaps = g["date"].diff().dt.days.dropna()
         n_severe = int((g["severity"] == SEVERE).sum())
         cost_share = _round(100 * g["estimated_cost_eur"].sum() / total_cost)
@@ -430,7 +462,7 @@ def _failure_modes(d: pd.DataFrame, focus_site: pd.DataFrame) -> list[dict]:
         priority, reason = failure_mode_priority(n_severe, cost_share, recurrences)
         share = len(g) / len(d)
         lift = share / site_share[mode] if site_share.get(mode, 0) > 0 else None
-        top = max(weather[mode].values())
+        top = max(weather[str(mode)].values())
         modes.append(
             {
                 "failure_mode": mode,
@@ -453,8 +485,10 @@ def _failure_modes(d: pd.DataFrame, focus_site: pd.DataFrame) -> list[dict]:
                 "share_of_equipment_incidents_pct": _round(100 * share),
                 "share_of_site_incidents_pct": _round(100 * site_share.get(mode, 0)),
                 "representation": representation(lift),
-                "weather_counts": weather[mode],
-                "dominant_weather": [w for w, n in weather[mode].items() if n == top],
+                "weather_counts": weather[str(mode)],
+                "dominant_weather": [
+                    w for w, n in weather[str(mode)].items() if n == top
+                ],
                 "dominant_weather_share_pct": _round(100 * top / len(g)),
                 "incidents": [
                     {
@@ -592,6 +626,13 @@ def build_equipment_stats(
 
     modes = _failure_modes(d, focus_site)
     weather = weather_table(d, focus_site)
+    noise = d[d["cluster_name"] == UNCLASSIFIED]
+    unclassified = {
+        "n_incidents": len(noise),
+        "incidents": noise["ref"].tolist(),
+        "cost_eur": _round(noise["estimated_cost_eur"].sum(), 0),
+        "cost_share_pct": _round(100 * noise["estimated_cost_eur"].sum() / total_cost),
+    }
 
     register = [
         {
@@ -619,8 +660,11 @@ def build_equipment_stats(
         "most_costly_incidents": most_costly,
         f"close_sequences_within_{SEQUENCE_DAYS}_days": _close_sequences(d),
         "failure_modes": modes,
+        "unclassified_incidents": unclassified,
         "register": register,
-        "facts": _facts(comparison, key_figures, yearly, most_costly, modes, weather),
+        "facts": _facts(
+            comparison, key_figures, yearly, most_costly, modes, weather, unclassified
+        ),
         # Local number -> global incident_id; never sent to the agents
         "incident_mapping": [
             {"ref": r["ref"], "incident_id": int(r["incident_id"])}
@@ -630,7 +674,7 @@ def build_equipment_stats(
 
 
 def _facts(
-    comparison, key_figures, yearly, most_costly, modes, weather
+    comparison, key_figures, yearly, most_costly, modes, weather, unclassified
 ) -> dict[str, list[str]]:
     """Ready-made sentences for the figures that are easy to misread, by topic."""
 
@@ -688,6 +732,13 @@ def _facts(
         cost.append(
             "The most costly incident and the most costly failure mode are different: "
             "do not attribute one to the other."
+        )
+    if unclassified["n_incidents"]:
+        cost.append(
+            f"{unclassified['n_incidents']} incident(s) ({', '.join(unclassified['incidents'])}) "
+            f"could not be assigned to a failure mode ({format_eur(unclassified['cost_eur'])} EUR, "
+            f"{unclassified['cost_share_pct']}% of the cost): they count in every total but "
+            "belong to no failure mode."
         )
 
     trend = []

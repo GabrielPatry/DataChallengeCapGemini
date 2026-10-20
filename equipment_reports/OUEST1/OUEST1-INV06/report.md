@@ -1,6 +1,6 @@
 # OUEST1-INV06: PV Inverter and DC Field Failure Modes and Critical Incidents
 
-**Equipment:** OUEST1-INV06 · **Site:** Centrale PV Ouest-1 · **Asset type:** PV inverter · **Generated on:** 2026-10-19
+**Equipment:** OUEST1-INV06 · **Site:** Centrale PV Ouest-1 · **Asset type:** PV inverter · **Generated on:** 2026-10-20
 
 > The PV inverter OUEST1-INV06 at Centrale PV Ouest-1 has experienced a higher-than-median number of incidents, with 37 failures compared to 31.5 for similar equipment at the site. The most costly failure mode involves surface damages to PV modules, accounting for nearly 60% of related costs, and is associated with severe incidents. Immediate actions should focus on regular thermography inspections and electrical testing to prevent surface damages and electrical anomalies, given the equipment's critical risk level and high criticality score.
 
@@ -51,7 +51,7 @@ This equipment, OUEST1-INV06, stands out from the median equipment of its site o
 
 ![Cost timeline](figures/cost_timeline.png)
 
-*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of failure modes, marker shape = failure mode; the three most costly incidents are labelled.*
+*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of failure modes, marker shape = failure mode, grey cross = unclassified; the three most costly incidents are labelled.*
 
 | Year | Incidents | Severe | Cost (EUR) | Cost vs previous year | Downtime (h) |
 | --- | --- | --- | --- | --- | --- |

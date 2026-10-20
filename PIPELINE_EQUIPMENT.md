@@ -144,6 +144,12 @@ numbered `#1`, `#2`, … in chronological order **per equipment** (the global
 `incident_id` never reaches the report; the `#k → incident_id` mapping is kept
 in `stats.json`, under `incident_mapping`).
 
+Incidents of the clustering's noise cluster (`C_NOISE`, or without a cluster)
+are relabelled **"Unclassified (no failure mode)"**: they count in every total,
+the timeline and the register, but form no failure mode (no priority, not in
+the weather matrix nor in the root causes). `stats.json` summarises them under
+`unclassified_incidents`, with a matching sentence in the cost facts.
+
 `stats.json` contains, among other blocks:
 
 | Block | Content |
@@ -183,6 +189,14 @@ Adding a figure only takes a new `plot_*` method.
 | `plot_cost_timeline` | cost of each incident over time; colour = failure-mode family, shape = failure mode, filled = severe, hollow = moderate, top 3 labelled |
 | `plot_downtime_weather` | downtime hours per incident and weather condition (black tick = median) |
 | `plot_cluster_weather` | heatmap: number of incidents per failure mode × weather |
+
+Colours do not depend on exact cluster names (the clustering step renames the
+clusters at each run): `failure_mode_family` assigns each failure mode to a
+family by keywords (accents and case ignored, e.g. *incendie* → Fire,
+*nettoyage* → Soiling, *jonction* / *connecteur* → Junction box), and
+`failure_mode_styles` gives the markers within a family in alphabetical order
+over the whole dataset, so a failure mode has the same style on every
+equipment. Unmatched names are grey; unclassified incidents are grey crosses.
 
 Figures are matplotlib PNGs (not plotly) to avoid depending on
 kaleido/Chrome. `run_equipment_plotting` writes `figures/`, `json/` and

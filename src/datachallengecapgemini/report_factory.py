@@ -1412,6 +1412,8 @@ class SectionContext:
             answer = _placeholder(schema)
         else:
             print(f"  {section}: asking Azure OpenAI")
+            # client and deployment are always set outside dry runs
+            assert self.deployment is not None
             answer, usage = call_azure(
                 self.client,
                 self.deployment,
@@ -1585,6 +1587,12 @@ def section_methodology(ctx: SectionContext) -> str:
             "description. The detailed analysis focuses on moderate and severe incidents; minor "
             "incidents only appear in the comparison with the site. Incidents are numbered #1, #2, … "
             "in chronological order for this equipment (see the annex)."
+            + (
+                " Incidents whose report could not be assigned to a failure mode are marked "
+                "*unclassified*: they count in every total but in no failure mode."
+                if ctx.stats["unclassified_incidents"]["n_incidents"]
+                else ""
+            )
         ),
         (
             "**Why this equipment.** Each piece of equipment receives a criticality score from 0 to "
@@ -1683,7 +1691,8 @@ def section_cost_timeline(ctx: SectionContext) -> str:
             _figure("cost_timeline", "Cost timeline"),
             (
                 "*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of "
-                "failure modes, marker shape = failure mode; the three most costly incidents are labelled.*"
+                "failure modes, marker shape = failure mode, grey cross = unclassified; the three most "
+                "costly incidents are labelled.*"
             ),
             yearly_table,
             f"**Trend.** {answer['trend']}",

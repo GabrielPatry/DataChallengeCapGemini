@@ -1,6 +1,6 @@
 # OUEST1-INV10 Inverter and DC Field Failure Modes and Incidents
 
-**Equipment:** OUEST1-INV10 · **Site:** Centrale PV Ouest-1 · **Asset type:** PV inverter · **Generated on:** 2026-10-19
+**Equipment:** OUEST1-INV10 · **Site:** Centrale PV Ouest-1 · **Asset type:** PV inverter · **Generated on:** 2026-10-20
 
 > The PV inverter and the upstream DC field at OUEST1-INV10 have experienced multiple incidents, with severe failures including wiring degradation and building support fires. The total cost of moderate and severe incidents is over 206,762 EUR, with the most costly incident at 49,142 EUR. Given the equipment's high risk level and criticality, initial actions should focus on thermography inspections, testing the DC field, and upgrading surge protection devices.
 
@@ -51,7 +51,7 @@ This equipment has a slightly lower number of incidents compared to the site med
 
 ![Cost timeline](figures/cost_timeline.png)
 
-*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of failure modes, marker shape = failure mode; the three most costly incidents are labelled.*
+*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of failure modes, marker shape = failure mode, grey cross = unclassified; the three most costly incidents are labelled.*
 
 | Year | Incidents | Severe | Cost (EUR) | Cost vs previous year | Downtime (h) |
 | --- | --- | --- | --- | --- | --- |

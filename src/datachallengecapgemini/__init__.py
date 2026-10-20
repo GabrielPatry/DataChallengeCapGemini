@@ -164,8 +164,8 @@ def main_equipment() -> None:
     """
     from datachallengecapgemini.equipment_stats import (
         compute_criticality,
+        has_failure_modes,
         load_solar_incidents,
-        number_incidents,
         select_equipment,
         site_code,
     )
@@ -203,10 +203,13 @@ def main_equipment() -> None:
     equipment_ids = select_equipment(
         criticality, args.site, args.equipment, args.all_equipment
     )
-    skipped = [e for e in equipment_ids if number_incidents(df, e).empty]
+    skipped = [e for e in equipment_ids if not has_failure_modes(df, e)]
     equipment_ids = [e for e in equipment_ids if e not in skipped]
     if skipped:
-        print(f"Skipping (no moderate or severe incident): {', '.join(skipped)}")
+        print(
+            "Skipping (no moderate or severe incident with a failure mode): "
+            + ", ".join(skipped)
+        )
     if not equipment_ids:
         print("No equipment to report on.")
         return
