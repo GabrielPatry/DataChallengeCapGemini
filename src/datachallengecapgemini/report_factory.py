@@ -1055,18 +1055,19 @@ def add_report_arguments(parser: argparse.ArgumentParser) -> None:
 # ===========================================================================
 #
 # For every equipment of a site (see ``run_equipment_reporting``):
-#   1. ``plot_factory.run_equipment_plotting`` has written figures/*.png,
+#   1. ``plot_factory.run_equipment_plotting`` has written figures/{png,html}/,
 #      json/<figure>.json (the data of each figure) and json/stats.json;
 #   2. each ``section_*`` function picks the statistics and figure data of
 #      its section, asks its own specialised agent (system prompt = role +
 #      shared rules; user prompt = section, questions, data) and renders the
 #      section markdown, saved as sections/<name>.md;
 #   3. the sections are assembled into report.md with
-#      templates/equipment_report.md.
+#      templates/equipment/equipment_report.md.
 # The agents never calculate: every number comes from json/, and the
 # priorities, risk level and confidence levels are decided in Python.
 
-EQUIPMENT_TEMPLATE_NAME = "equipment_report.md"
+# Equipment templates live in their own subfolder of templates/
+EQUIPMENT_TEMPLATE_NAME = "equipment/equipment_report.md"
 INCIDENT_REF_PATTERN = re.compile(r"#(\d+)\b")
 # Numbers written in text: "49 142", "207,762", "1.33", "2023" (signs ignored)
 NUMBER_PATTERN = re.compile(r"\d{1,3}(?:[ ,  ]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?")
@@ -1297,7 +1298,7 @@ def _wrong_refs(text: str, allowed: list[str]) -> list[str]:
 
 def _figure(name: str, alt: str) -> str:
     """Image link relative to sections/ (rewritten for report.md on assembly)."""
-    return f"![{alt}](../figures/{name}.png)"
+    return f"![{alt}](../figures/png/{name}.png)"
 
 
 # ---------------------------------------------------------------------------

@@ -219,9 +219,11 @@ uv run dc-equipment --site OUEST1 --equipment OUEST1-INV10 --force root_causes
    criticality score (incidents, severe incidents ×2, cost, downtime) against
    its site and against the fleet; it is critical (P1/P2) when one of them
    reaches 75. `--all-equipment` reports on every equipment of the site.
-2. **Plotting** (`plot_factory.EquipmentPlotFactory`): for each equipment,
-   `figures/<name>.png` and `json/<name>.json` (the data of each figure),
-   plus `json/stats.json` with every statistic of the report.
+2. **Plotting** (`plot_factory.EquipmentPlotFactory`): like `PlotFactory`,
+   each `plot_*` method returns a plotly figure and a dictionary (here the
+   data drawn). For each equipment: `figures/png/<name>.png`,
+   `figures/html/<name>.html`, `json/<name>.json`, plus `json/stats.json`
+   with every statistic of the report.
 3. **Reporting** (`report_factory`): one `section_*` function per section,
    each asking its own agent (role + shared rules, the section's questions
    and only its statistics and figure JSON). The agents never calculate;
@@ -229,11 +231,14 @@ uv run dc-equipment --site OUEST1 --equipment OUEST1-INV10 --force root_causes
    answer is checked (numbers absent from the input, wrong incident numbers,
    P1 failure modes without action) with one automatic correction round.
    Sections are saved in `sections/<name>.md` and assembled into `report.md`
-   with `templates/equipment_report.md`.
+   with `templates/equipment/equipment_report.md`.
 
-Outputs go to `equipment_reports/<site>/<equipment>/`. Agent answers are
-cached in `sections/` and only requested again when their prompt changes
-(or with `--force [SECTION ...]`).
+Input: `data/incidents_clusterised_solar.csv` (written by the clustering step
+of `uv run dc`; override with `--solar-csv`). Outputs go to
+`equipment_reports/<site>/<equipment>/` (gitignored). Agent answers are cached
+in `sections/` and only requested again when their prompt changes (or with
+`--force [SECTION ...]`). Full documentation: `PIPELINE_EQUIPMENT.md`;
+walkthrough: `uv run marimo edit notebooks/equipment_pipeline_walkthrough.py`.
 
 ## Running the notebook
 

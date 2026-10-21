@@ -3,7 +3,8 @@
 *Branch `juan/equipment-analysis` — Data Challenge Capgemini x Mines Paris 2026, PV incidents.*
 
 A runnable walkthrough of everything below is in
-[`notebooks/equipment_pipeline_walkthrough.ipynb`](notebooks/equipment_pipeline_walkthrough.ipynb).
+[`notebooks/equipment_pipeline_walkthrough.py`](notebooks/equipment_pipeline_walkthrough.py)
+(marimo: `uv run marimo edit notebooks/equipment_pipeline_walkthrough.py`).
 
 ## Contents
 
@@ -14,7 +15,7 @@ A runnable walkthrough of everything below is in
    - 3.2 Statistics + facts (`equipment_stats.py`)
    - 3.3 Figures + JSON (`plot_factory.py`)
    - 3.4 One Azure agent per section (`report_factory.py`)
-   - 3.5 Report assembly (`templates/equipment_report.md`)
+   - 3.5 Report assembly (`templates/equipment/equipment_report.md`)
 4. [Full example: OUEST1-INV10](#4-full-example-ouest1-inv10)
 5. [Transposing the pipeline to other scenarios](#5-transposing-the-pipeline-to-other-scenarios)
 6. [Repository layout on this branch](#6-repository-layout-on-this-branch)
@@ -43,8 +44,8 @@ Three principles drive the design:
 ## 2. Pipeline overview
 
 ```
-  incidents_clusterised_solar.csv   (1 row = 1 incident, with its cluster =
-            |                        "failure mode")
+  data/incidents_clusterised_solar.csv  (1 row = 1 incident, with its
+            |                            cluster = "failure mode")
             v
   +--------------------------------------------------------------+
   | [1] SELECTION          equipment_stats.compute_criticality   |
@@ -61,11 +62,11 @@ Three principles drive the design:
             v
   +--------------------------------------------------------------+
   | [3] FIGURES + JSON     plot_factory.EquipmentPlotFactory     |
-  |     plot_cost_timeline   -> figures/cost_timeline.png        |
+  |     plot_cost_timeline   -> figures/{png,html}/cost_timeline |
   |                             json/cost_timeline.json          |
-  |     plot_downtime_weather-> figures/downtime_weather.png     |
+  |     plot_downtime_weather-> figures/.../downtime_weather     |
   |                             json/downtime_weather.json       |
-  |     plot_cluster_weather -> figures/cluster_weather.png      |
+  |     plot_cluster_weather -> figures/.../cluster_weather      |
   |                             json/cluster_weather.json        |
   |     + json/stats.json  (every statistic of step 2)           |
   +--------------------------------------------------------------+
@@ -91,18 +92,19 @@ Three principles drive the design:
             |   sections/<section>.md
             v
   +--------------------------------------------------------------+
-  | [5] ASSEMBLY     templates/equipment_report.md -> report.md  |
+  | [5] ASSEMBLY  templates/equipment/equipment_report.md        |
+  |               -> report.md                                   |
   |     (optional: --pdf with pandoc, via pdf_export.py)         |
   +--------------------------------------------------------------+
 ```
 
-Outputs, all versioned in git:
+Outputs (generated files, ignored by git — run the command to get them):
 
 | Path | Content |
 | --- | --- |
 | `equipment_reports/<SITE>/criticality.csv` | scores of every equipment of the site |
 | `equipment_reports/<SITE>/<EQUIPMENT>/report.md` | final report |
-| `.../figures/*.png` | the 3 figures |
+| `.../figures/png/*.png`, `figures/html/*.html` | the 3 plotly figures (static and interactive) |
 | `.../json/<figure>.json`, `json/stats.json` | data of each figure + every statistic |
 | `.../sections/<section>.md` | each section on its own |
 | `.../sections/<section>.prompt.md`, `.llm.json` | exact prompt and cached Azure answer of each agent |
@@ -179,8 +181,8 @@ Priority of a failure mode (and of every recommendation targeting it):
 
 ### 3.3 Figures + JSON (`plot_factory.EquipmentPlotFactory`)
 
-Each `plot_*` method returns an `EquipmentPlot(figure, data)`: the matplotlib
-figure **and** the dictionary of the data it draws. The chart and the JSON given
+Like the fleet `PlotFactory`, each `plot_*` method returns a plotly figure
+**and** a dictionary — here the exact data the figure draws. The chart and the JSON given
 to the agent therefore come from the same computation and cannot diverge.
 Adding a figure only takes a new `plot_*` method.
 
@@ -198,9 +200,9 @@ family by keywords (accents and case ignored, e.g. *incendie* → Fire,
 over the whole dataset, so a failure mode has the same style on every
 equipment. Unmatched names are grey; unclassified incidents are grey crosses.
 
-Figures are matplotlib PNGs (not plotly) to avoid depending on
-kaleido/Chrome. `run_equipment_plotting` writes `figures/`, `json/` and
-`json/stats.json` for each equipment.
+`run_equipment_plotting` writes, for each equipment, `figures/png/` (PNG
+export through kaleido, like `run_plotting`), `figures/html/` (interactive),
+`json/<figure>.json` and `json/stats.json`.
 
 ### 3.4 One Azure agent per section (`report_factory.py`)
 
@@ -248,7 +250,8 @@ What Python decides and what the agent writes:
 
 ### 3.5 Assembly
 
-`templates/equipment_report.md` only contains `{{ section_<x> }}` markers.
+`templates/equipment/equipment_report.md` only contains `{{ section_<x> }}`
+markers.
 `fill_template` (the same function used by the teammates' fleet pipeline)
 replaces each marker with the section's markdown and fixes the image paths
 (`../figures/` → `figures/`).
@@ -280,7 +283,7 @@ Priorities: *Incendie bâtiment support PV* → P1 (2 severe + 24.7 % of the cos
 + 1 recurrence < 90 d); *Défaillance chaîne et boîtier de jonction* → P2;
 *Dommages superficiels modules PV* → P3; …
 
-**[3] Figures + JSON.** `figures/cost_timeline.png` + `json/cost_timeline.json`,
+**[3] Figures + JSON.** `figures/png/cost_timeline.png` + `json/cost_timeline.json`,
 where each point is, for example:
 
 ```json
@@ -398,9 +401,8 @@ careful with the reading: it measures workload, not blame).
 ## 6. Repository layout on this branch
 
 Legend: **[EQUIPMENT]** equipment-level pipeline (this branch) · **[FLEET]**
-teammates' fleet pipeline (main, untouched) · **[LEGACY]** earlier prototype,
-superseded by `src/` (can be deleted) · **[LOCAL]** not versioned
-(`.gitignore`), everyone has it locally.
+teammates' fleet pipeline (main) · **[LOCAL]** not versioned (`.gitignore`):
+data, credentials and generated files.
 
 ```
 DataChallengeCapGemini/
@@ -430,53 +432,25 @@ DataChallengeCapGemini/
 |-- templates/
 |   |-- solar_report.md          solar fleet template             [FLEET]
 |   |-- wind_report.md           wind fleet template              [FLEET]
-|   `-- equipment_report.md      equipment template               [EQUIPMENT]
+|   `-- equipment/
+|       `-- equipment_report.md  equipment template               [EQUIPMENT]
 |
-|-- equipment_reports/           OUTPUTS of the equipment pipeline [EQUIPMENT]
-|   `-- OUEST1/
-|       |-- criticality.csv      scores of the 10 equipment of the site
-|       `-- OUEST1-INV02 ... OUEST1-INV10/   (6 critical equipment)
-|           |-- report.md        final report
-|           |-- figures/*.png    3 figures
-|           |-- json/            figure data + stats.json
-|           `-- sections/        section .md, prompts and Azure answers
-|
-|-- incidents_clusterised_solar.csv   clusterised solar data (copy at the
-|                                root; dc-equipment uses
-|                                data/incidents_clusterised_solar.csv first
-|                                if it exists, otherwise this copy)
-|-- data/                        [LOCAL] incident CSV, PDFs, outputs of the
-|                                fleet pipeline (data/plots)
-|-- filled_templates/            [LOCAL] generated fleet reports
-|-- embeddings_*.npy             [LOCAL] Azure embeddings
-|
-|-- notebooks/
-|   |-- equipment_pipeline_walkthrough.ipynb   runnable walkthrough [EQUIPMENT]
-|   `-- *.py                     teammates' marimo notebooks      [FLEET]
-|       (starterkit_students, clustering_pipeline, PerSiteAnalysis,
-|        unclustered_exploration, view_csv_data)
+|-- notebooks/                   marimo notebooks (.py)
+|   |-- equipment_pipeline_walkthrough.py   runnable walkthrough  [EQUIPMENT]
+|   `-- starterkit_students, clustering_pipeline, PerSiteAnalysis,
+|       unclustered_exploration, view_csv_data                    [FLEET]
 |-- functional_pipeline_test/    teammates' pipeline experiments
 |
-`-- site_analysis/               [LEGACY] first equipment-level version:
-    |-- equipment_data.py        standalone scripts, a single prompt
-    |-- generate_equipment_reports(_v2).py   for the whole report (v1, v2)
-    |-- prompts(_v2).py
-    |-- equipment_report_template(_v2).md
-    |-- equipment_criticality.csv
-    |-- reports/OUEST1-*.md      v1 reports and OUEST1-INV10-v2.md
-    `-- figures/OUEST1-*.png     (useful to compare with the current
-                                  version; everything is replaced by
-                                  src/ + equipment_reports/)
+|-- data/                        [LOCAL] incident CSVs (incl. the clusterised
+|                                ones read by dc-equipment), PDFs, data/plots
+|-- filled_templates/            [LOCAL] generated fleet reports
+`-- equipment_reports/           [LOCAL] generated equipment reports:
+    `-- <SITE>/criticality.csv, <SITE>/<EQUIPMENT>/{report.md, figures/,
+        json/, sections/}
 ```
 
-To untangle (proposal, not applied on this branch):
-
-- delete `site_analysis/` once the versions have been compared;
-- move `incidents_clusterised_solar.csv` to `data/` (team convention) and stop
-  versioning it;
-- open a PR `juan/equipment-analysis → main`: the changes to the shared files
-  (`plot_factory`, `report_factory`, `__init__`, `pyproject`, `README`) are
-  **additions only**, the fleet pipeline does not change.
+Every Python file used by the pipelines lives in `src/datachallengecapgemini/`;
+no data and no generated file is versioned.
 
 ## 7. Useful commands
 
