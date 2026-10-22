@@ -208,6 +208,35 @@ CONCLUSION_SYSTEM_PROMPT = (
     "chiffre. Rédige en français, avec un ton de rapport professionnel."
 )
 
+SYNTHESE_SYSTEM_PROMPT = """
+Tu es un expert en analyse de données et en fiabilité industrielle.
+
+Tu reçois un rapport complet d'analyse des incidents d'un parc
+d'actifs industriels, déjà rédigé.
+
+Ta mission est de produire une synthèse générale du rapport en français.
+
+La synthèse doit :
+- Identifier les 3 à 5 enseignements les plus importants du rapport.
+- Faire ressortir les principaux facteurs de coût et de temps d'arrêt.
+- Mettre en évidence les tendances et les problèmes récurrents.
+- Hiérarchiser les enjeux et les priorités d'action.
+- Relier les constats aux recommandations du rapport.
+- Mentionner les limites importantes de l'analyse, si elles sont
+  explicitement documentées dans le rapport.
+
+Contraintes :
+- Lis le rapport dans son ensemble avant de rédiger.
+- Ne répète pas simplement la conclusion existante.
+- N'invente aucun chiffre, fait, cause racine ou recommandation.
+- Distingue les constats établis des hypothèses.
+- Signale les éventuelles contradictions ou limites du rapport.
+- Évite les répétitions et les détails secondaires.
+- Rédige une synthèse autonome, claire et professionnelle,
+  de 200 à 300 mots, avec des paragraphes et des puces Markdown
+  si nécessaire.
+"""
+
 
 @dataclass
 class ReportProse:
@@ -520,6 +549,25 @@ class ReportFactory:
     # ------------------------------------------------------------------
     # Public API — write_* methods run the prompts and return the text
     # ------------------------------------------------------------------
+
+    def write_synthese(self, report: str) -> str:
+        """Generate a global synthesis from the complete Markdown report."""
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", SYNTHESE_SYSTEM_PROMPT),
+            (
+                "human",
+                "Voici le rapport complet à analyser :\n\n{report}\n\n"
+                "Rédige la synthèse générale du rapport."
+            ),
+        ])
+
+        chain = prompt | self.llm | StrOutputParser()
+
+        return chain.invoke(
+            {"report": report},
+            config={"callbacks": [self.token_usage]},
+        )
 
     def write_synopsis(self, prose: ReportProse | None = None) -> str:
         """Generate the executive synopsis; stored in *prose* if given."""
@@ -1013,13 +1061,27 @@ def run_reporting(
 
         template = template_path.read_text(encoding="utf-8")
         context = build_report_context(df, label, plots_dir, report_dir, prose=prose)
+        # 1. Generate the complete report from the template
         report = render_report(template, context, plots_dir)
 
+        # 2. Ask the synthesis agent to read the complete report
+        synthese = factory.write_synthese(report)
+
+        # 3. Append the synthesis to the final report
+        report = (
+            report.rstrip()
+            + "\n\n## Synthèse générale\n\n"
+            + synthese.strip()
+            + "\n"
+        )
+
+        # 4. Save the enriched report
         report_path = report_dir / "report.md"
         report_path.write_text(report, encoding="utf-8")
         print(f"Saved {report_path}")
 
         factory.print_token_usage()
+       
 
     print(f"Done. Filled reports are in {reports_output_dir}")
 
