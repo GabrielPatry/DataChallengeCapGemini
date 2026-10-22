@@ -204,6 +204,99 @@ You can also start the preprocessing only using:
 uv run datachallengecapgemini-preprocess
 ```
 
+### Adapter les plans solaires aux sites
+
+Après la génération des candidates de remédiation, l'étape 4 applique les règles
+définies dans `notebooks/site_profile_adaptation.py` aux niveaux et valeurs des
+indicateurs mesurés dans `data/site_mapping_solar.json`. Elle ne consulte pas
+l'affectation à un profil, notamment lorsque cette affectation est ambiguë.
+Les règles peuvent remonter, ajouter, écarter ou phaser une action. Le plan
+d'entrée est conservé ; le résultat par défaut est écrit dans
+`data/fixing_plan_remediation_solar_adapted.json`, avec les
+`adapted_actions`, indicateurs pris en compte et règles appliquées pour chaque
+cellule.
+
+```bash
+uv run python notebooks/site_profile_adaptation.py
+```
+
+Les fichiers d'entrée et de sortie peuvent être remplacés avec `--input`,
+`--site-mapping`, `--action-library` et `--output`. Les seuils et niveaux de
+ces règles manuelles sont à valider par un expert métier.
+
+### Estimer les gains hypothétiques
+
+L'estimation d'impact s'exécute après l'adaptation. Pour chaque action adaptée,
+elle multiplie le coût total de la cellule par les réductions basse, centrale
+et haute de son scénario `expected_effectiveness` dans
+`data/solar_action_library.json`. Les trois montants sont des hypothèses de
+travail, pas des économies garanties. L'effort `S`, `M` ou `L` de la
+bibliothèque est affiché avec chaque action. Les estimations restent
+individuelles et ne sont pas additionnées, car plusieurs actions peuvent avoir
+des effets qui se recouvrent.
+
+```bash
+uv run python notebooks/impact_estimation.py
+```
+
+Le résultat est écrit par défaut dans
+`data/fixing_plan_remediation_solar_impact.json`. Les options `--input`,
+`--action-library` et `--output` permettent de choisir les fichiers utilisés.
+
+### Produire et suivre les fiches d'action
+
+L'étape finale assemble les actions adaptées et leurs estimations avec les
+incidents organisés. Elle séquence les actions par échéance (immédiat, court
+terme, structurel) et produit une fiche JSON de suivi ainsi qu'un CSV ouvrable
+dans un tableur :
+
+```bash
+uv run python notebooks/final_action_plan.py
+```
+
+Les sorties par défaut sont `data/final_action_plan_solar.json` et
+`data/final_action_plan_solar.csv`. Chaque fiche contient l'identifiant stable,
+le site et la cause, les incidents/preuves/exemples, l'action, le rôle
+responsable, l'effort, l'échéance, le KPI et sa baseline mesurée, une cible
+indicative, la fourchette de gains hypothétiques et le risque historique
+d'inaction.
+
+La confiance distingue la couverture d'extractions explicites/suggérées d'un
+véritable accord inter-évaluateurs, qui n'est pas présent dans les sources. Le
+verdict d'effet reste « non testé » tant qu'il n'y a pas de suivi exploitable.
+Pour rejouer le plan après une action, renseigner dans le JSON précédent
+`suivi.statut_mise_en_oeuvre` à `terminee` et `suivi.date_mise_en_oeuvre`, puis
+relancer avec `--previous-plan data/final_action_plan_solar.json`. La mesure
+rejouée utilise les incidents datés depuis la mise en œuvre et compare le KPI à
+la cible indicative; cette comparaison est descriptive, pas une preuve de
+causalité. Les options `--input`, `--incidents`, `--action-library`, `--output`,
+`--csv-output` et `--plan-date` permettent de choisir les sources et la date de
+référence.
+
+### Générer le rapport Markdown final
+
+Pour produire une version éditorialisée du plan final, avec synthèse, tableau de
+séquencement et fiches détaillées regroupées par phase et par site :
+
+```bash
+uv run python notebooks/report_generation.py
+```
+
+Le rapport complet est écrit dans `data/final_action_report_solar.md`. Pour
+obtenir une version concise, avec introduction, mapping des sites et une section
+dépliable par site triée par échéance :
+
+```bash
+uv run python notebooks/report_generation.py --abrege
+```
+
+Cette version n'affiche par action que la cause ciblée, l'effort, le gain
+hypothétique et la recommandation. Elle utilise `data/site_mapping_solar.json`
+pour décrire les profils candidats et les niveaux mesurés, en signalant les
+affectations ambiguës. Sa sortie par défaut est
+`data/final_action_report_solar_abbreviated.md`. Les options `--input`,
+`--site-mapping` et `--output` permettent de choisir les fichiers utilisés.
+
 ## Running the notebook
 
 The notebook is a **marimo** notebook (not Jupyter). Start the marimo server:
