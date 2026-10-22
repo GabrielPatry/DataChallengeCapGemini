@@ -1,7 +1,7 @@
 [project]
 name = "datachallengecapgemini"
 version = "0.1.0"
-description = "Add your description here"
+description = "Notre réponse au datachallenge capgemini"
 readme = "README.md"
 authors = [
     { name = "gabriel", email = "144031387+GabrielPatry@users.noreply.github.com" }
