@@ -559,8 +559,10 @@ class ReportFactory:
                 ("system", SYNTHESE_SYSTEM_PROMPT),
                 (
                     "human",
-                    "Voici le rapport complet à analyser :\n\n{report}\n\n"
-                    "Rédige la synthèse générale du rapport.",
+                    (
+                        "Voici le rapport complet à analyser :\n\n{report}\n\n"
+                        "Rédige la synthèse générale du rapport."
+                    ),
                 ),
             ]
         )
