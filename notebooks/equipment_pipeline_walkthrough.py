@@ -10,7 +10,7 @@ def _(mo):
     # Equipment-level incident reports — pipeline walkthrough
 
     This notebook shows, with runnable cells, the per-equipment report pipeline
-    (command `uv run dc-equipment`). It has four parts:
+    (command `uv run dc equipment`). It has four parts:
 
     1. **The pipeline** — what each step does and why it is built this way.
     2. **Step by step on one equipment** — `OUEST1-INV10`: every step of the pipeline runs in its own cell.
@@ -167,7 +167,7 @@ def _(mo):
     # Part 2 — Step by step on one equipment: `OUEST1-INV10`
 
     Each cell below runs one step of the pipeline. Together they do exactly what
-    `uv run dc-equipment --site OUEST1 --equipment OUEST1-INV10` does.
+    `uv run dc equipment --site OUEST1 --equipment OUEST1-INV10` does.
     """)
     return
 
@@ -407,7 +407,7 @@ def _(mo):
     questions, data subset and output schema.
 
     **Cache:** each answer is stored in `sections/<section>.llm.json` with the hash of its prompt. If
-    `uv run dc-equipment --site OUEST1` was already run locally, its answers are copied into the demo
+    `uv run dc equipment --site OUEST1` was already run locally, its answers are copied into the demo
     folder: the prompts are identical, so they are reused and no Azure call is made.
     """)
     return
@@ -551,7 +551,7 @@ def _(TEMPLATES_DIR, equipment_dir, mo, section_context, show_markdown):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    **Same result in one call** (what `uv run dc-equipment` runs):
+    **Same result in one call** (what `uv run dc equipment` runs):
 
     ```python
     from datachallengecapgemini.plot_factory import run_equipment_plotting
@@ -916,7 +916,7 @@ def _(mo):
     equipment of the site Est-1. From a terminal, the equivalent is:
 
     ```bash
-    uv run dc-equipment --site EST1 --equipment EST1-INV07
+    uv run dc equipment --site EST1 --equipment EST1-INV07
     ```
     """)
     return
@@ -980,7 +980,7 @@ def _(equipment_dir_2, mo, show_markdown):
 def _(mo):
     mo.md(r"""
     To generate the reports of a whole site, run the command without a temporary folder
-    (`uv run dc-equipment --site EST1`): the outputs go to `equipment_reports/EST1/` (not versioned).
+    (`uv run dc equipment --site EST1`): the outputs go to `equipment_reports/EST1/` (not versioned).
     """)
     return
 

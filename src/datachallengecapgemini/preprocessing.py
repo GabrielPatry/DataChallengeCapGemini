@@ -8,9 +8,9 @@ Two steps:
    metadata table and incident description, and writes a CSV compatible with
    ``incidents_students.csv``. This step is cheap and always runs.
 
-Both steps are importable and also available as CLI commands:
+Both steps are importable and also available as a CLI command:
 
-- ``uv run datachallengecapgemini-preprocess`` — full pipeline (OCR + parse)
+- ``uv run dc preprocess`` — full pipeline (OCR + parse)
 """
 
 import argparse
@@ -681,7 +681,7 @@ def run_preprocessing(args: PreprocessingArgs) -> None:
 
 
 def main() -> None:
-    """CLI entry point — ``uv run datachallengecapgemini-preprocess``."""
+    """CLI entry point — ``uv run python -m datachallengecapgemini.preprocessing``."""
     parser = argparse.ArgumentParser(
         description="OCR scanned PDFs with Surya, then parse the results into a CSV."
     )

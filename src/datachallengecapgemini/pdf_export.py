@@ -11,10 +11,9 @@ command is on your ``PATH``. Pandoc also needs a PDF engine — this module
 uses ``xelatex`` (TeX Live), which handles the accented French text and the
 Unicode symbols (``→``, ``·``) present in the reports.
 
-Available as the last step of the top-level ``datachallengecapgemini`` entry
-point:
+Available as the last step of the top-level ``dc`` entry point:
 
-- ``uv run datachallengecapgemini`` — preprocessing (optional) + plotting + reporting + PDF export
+- ``uv run dc`` — plotting + reporting + PDF export
 """
 
 import argparse
@@ -99,7 +98,7 @@ def run_pdf_export(reports_output_dir: Path) -> list[Path]:
     if not markdown_reports:
         raise FileNotFoundError(
             f"No markdown reports found in {reports_output_dir} — run the "
-            "reporting step first (uv run datachallengecapgemini)."
+            "reporting step first (uv run dc)."
         )
 
     pdf_paths = []

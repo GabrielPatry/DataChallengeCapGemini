@@ -34,84 +34,94 @@ __all__ = [
 
 
 def main() -> None:
-    """CLI entry point — ``uv run datachallengecapgemini``."""
-    from datachallengecapgemini.clustering import (
-        ClusteringArgs,
-        add_clustering_arguments,
-        run_clustering,
-    )
-    from datachallengecapgemini.pdf_export import (
-        add_pdf_arguments,
-        run_pdf_export,
-    )
+    """CLI entry point — ``uv run dc``.
+
+    Subcommands:
+
+    - ``dc`` (no subcommand) — main pipeline: clustering (skipped by default,
+      use ``--all`` to recompute) → plotting → reporting → PDF export.
+    - ``dc preprocess`` — OCR scanned PDFs and parse them into a merged CSV.
+    - ``dc equipment`` — per-equipment incident reports (solar).
+    """
+    from datachallengecapgemini.clustering import add_clustering_arguments
+    from datachallengecapgemini.pdf_export import add_pdf_arguments
     from datachallengecapgemini.plot_factory import (
+        add_equipment_plotting_arguments,
         add_plotting_arguments,
-        run_plotting,
     )
-    from datachallengecapgemini.preprocessing import (
-        PreprocessingArgs,
-        add_preprocessing_arguments,
-        run_preprocessing,
-    )
+    from datachallengecapgemini.preprocessing import add_preprocessing_arguments
     from datachallengecapgemini.report_factory import (
+        add_equipment_report_arguments,
         add_report_arguments,
-        run_reporting,
     )
 
     parser = argparse.ArgumentParser(
-        description="The CLI entry point for the whole pipeline, from preprocessing to report generation"
+        prog="dc",
+        description="Incident analysis pipeline for PV (solar) and wind assets.",
     )
+    subparsers = parser.add_subparsers(dest="command", title="subcommands")
 
+    # --- Pipeline arguments (default when no subcommand is given) ---
     parser.add_argument(
-        "--with-preprocessing",
+        "--all",
         action="store_true",
-        help="If we should run the preprocessing or not",
+        help="Recompute every step, including clustering (CSV → CSV). "
+        "By default, clustering is skipped and the existing clusterised "
+        "CSVs are reused.",
     )
+    add_clustering_arguments(parser)
+    add_plotting_arguments(parser)
+    add_report_arguments(parser)
+    add_pdf_arguments(parser)
 
-    add_preprocessing_arguments(
-        parser
-    )  # adding preprocessing specific aguments to the preprocessing specific parser
-    add_clustering_arguments(
-        parser
-    )  # adding clustering specific arguments to the pipeline parser
-    add_plotting_arguments(
-        parser
-    )  # adding plotting specific arguments to the pipeline parser
-    add_report_arguments(
-        parser
-    )  # adding report generation specific arguments to the pipeline parser
-    add_pdf_arguments(
-        parser
-    )  # adding PDF export specific arguments to the pipeline parser
+    # --- dc preprocess ---
+    preprocess_parser = subparsers.add_parser(
+        "preprocess",
+        help="OCR scanned PDFs and parse them into a merged incidents CSV.",
+        description="OCR scanned PDFs with Surya, then parse the results into a CSV.",
+    )
+    add_preprocessing_arguments(preprocess_parser)
+
+    # --- dc equipment ---
+    equipment_parser = subparsers.add_parser(
+        "equipment",
+        help="Per-equipment incident reports (solar), one Azure OpenAI agent per section.",
+        description="Per-equipment incident reports (solar), one Azure OpenAI agent per section.",
+    )
+    equipment_parser.add_argument(
+        "--site", required=True, help="Site code (e.g. OUEST1) or full site name."
+    )
+    equipment_parser.add_argument(
+        "--equipment",
+        nargs="+",
+        help="Report on these equipment only (default: the critical equipment of the site).",
+    )
+    equipment_parser.add_argument(
+        "--all-equipment",
+        action="store_true",
+        help="Report on every equipment of the site, not only the critical ones.",
+    )
+    add_equipment_plotting_arguments(equipment_parser)
+    add_equipment_report_arguments(equipment_parser)
 
     args = parser.parse_args()
 
-    if args.with_preprocessing:
-        args_to_use = PreprocessingArgs(
-            input_dir=args.input_dir,
-            digital_input_dir=args.digital_input_dir,
-            output_dir=args.output_dir,
-            limit=args.limit,
-            force=args.force,
-            output_csv=args.output_csv,
-            output_digital_csv=args.output_digital_csv,
-            output_merged_csv=args.output_merged_csv,
-            reference_csv=args.reference_csv,
-        )
-        run_preprocessing(args_to_use)
-
+    if args.command == "preprocess":
+        _run_preprocess(args)
+    elif args.command == "equipment":
+        _run_equipment(args)
     else:
-        print(
-            "Skipping preprocessing, assuming the merged incidents CSV "
-            f"already exists at {args.clustering_input_csv}..."
-        )
+        _run_pipeline(args)
 
-    if args.skip_clustering:
-        print(
-            "Skipping clustering, assuming the clusterised solar and wind "
-            f"CSVs already exist at {args.solar_csv} and {args.wind_csv}..."
-        )
-    else:
+
+def _run_pipeline(args: argparse.Namespace) -> None:
+    """Run the main pipeline: clustering (optional) → plotting → reporting → PDF."""
+    from datachallengecapgemini.clustering import ClusteringArgs, run_clustering
+    from datachallengecapgemini.pdf_export import run_pdf_export
+    from datachallengecapgemini.plot_factory import run_plotting
+    from datachallengecapgemini.report_factory import run_reporting
+
+    if args.all:
         print()
         print("=" * 60)
         print("Clustering: topic modeling of solar and wind incidents")
@@ -125,6 +135,12 @@ def main() -> None:
                 max_cluster_size_fraction=args.max_cluster_size_fraction,
                 min_cluster_size_step=args.min_cluster_size_step,
             )
+        )
+    else:
+        print(
+            "Skipping clustering (CSV → CSV step), assuming the clusterised "
+            f"solar and wind CSVs already exist at {args.solar_csv} and "
+            f"{args.wind_csv}. Use --all to recompute."
         )
 
     print()
@@ -155,12 +171,37 @@ def main() -> None:
         run_pdf_export(args.reports_output_dir)
 
 
-def main_equipment() -> None:
-    """CLI entry point — ``uv run dc-equipment --site OUEST1``.
+def _run_preprocess(args: argparse.Namespace) -> None:
+    """Run the preprocessing pipeline (OCR + parse + merge)."""
+    from datachallengecapgemini.preprocessing import (
+        PreprocessingArgs,
+        run_preprocessing,
+    )
 
-    Per-equipment reports for one site: plot_factory writes the figures and
-    JSON of every selected equipment, then report_factory runs one Azure
-    OpenAI agent per report section and assembles the report.
+    if args.limit is not None and args.limit < 1:
+        raise SystemExit("error: --limit must be at least 1")
+
+    run_preprocessing(
+        PreprocessingArgs(
+            input_dir=args.input_dir,
+            digital_input_dir=args.digital_input_dir,
+            output_dir=args.output_dir,
+            limit=args.limit,
+            force=args.force,
+            output_csv=args.output_csv,
+            output_digital_csv=args.output_digital_csv,
+            output_merged_csv=args.output_merged_csv,
+            reference_csv=args.reference_csv,
+        )
+    )
+
+
+def _run_equipment(args: argparse.Namespace) -> None:
+    """Run the equipment-level reports for one site.
+
+    plot_factory writes the figures and JSON of every selected equipment,
+    then report_factory runs one Azure OpenAI agent per report section and
+    assembles the report.
     """
     from datachallengecapgemini.equipment_stats import (
         compute_criticality,
@@ -169,34 +210,8 @@ def main_equipment() -> None:
         select_equipment,
         site_code,
     )
-    from datachallengecapgemini.plot_factory import (
-        add_equipment_plotting_arguments,
-        run_equipment_plotting,
-    )
-    from datachallengecapgemini.report_factory import (
-        add_equipment_report_arguments,
-        run_equipment_reporting,
-    )
-
-    parser = argparse.ArgumentParser(
-        description="Per-equipment incident reports (solar), one Azure OpenAI agent per section"
-    )
-    parser.add_argument(
-        "--site", required=True, help="Site code (e.g. OUEST1) or full site name."
-    )
-    parser.add_argument(
-        "--equipment",
-        nargs="+",
-        help="Report on these equipment only (default: the critical equipment of the site).",
-    )
-    parser.add_argument(
-        "--all-equipment",
-        action="store_true",
-        help="Report on every equipment of the site, not only the critical ones.",
-    )
-    add_equipment_plotting_arguments(parser)
-    add_equipment_report_arguments(parser)
-    args = parser.parse_args()
+    from datachallengecapgemini.plot_factory import run_equipment_plotting
+    from datachallengecapgemini.report_factory import run_equipment_reporting
 
     df = load_solar_incidents(args.solar_csv)
     criticality = compute_criticality(df)

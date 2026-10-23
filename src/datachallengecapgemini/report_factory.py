@@ -27,10 +27,9 @@ raise an error so typos in templates are caught immediately.
 Filled reports are written to ``filled_templates/solar/report.md`` and
 ``filled_templates/wind/report.md``.
 
-Available as the last step of the top-level ``datachallengecapgemini`` entry
-point:
+Available as a step of the top-level ``dc`` entry point:
 
-- ``uv run datachallengecapgemini`` — preprocessing (optional) + plotting + reporting
+- ``uv run dc`` — plotting + reporting (+ PDF export)
 """
 
 import argparse
@@ -985,7 +984,7 @@ def build_report_context(
     if not png_dir.is_dir() and not html_dir.is_dir():
         raise FileNotFoundError(
             f"No plots found in {plots_dir} — run the plotting step first "
-            "(uv run datachallengecapgemini)."
+            "(uv run dc)."
         )
     plot_names = sorted(
         {path.stem for path in png_dir.glob("plot_*.png")}

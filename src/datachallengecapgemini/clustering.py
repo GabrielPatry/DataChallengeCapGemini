@@ -8,10 +8,10 @@ clusterised CSV per asset type is written (with the ``topic``,
 
 The step is importable (:func:`run_clustering_pipeline` for a single asset
 type, :func:`run_clustering` for solar and wind) and is part of the main
-pipeline (``uv run datachallengecapgemini``). It is also available as a
-standalone CLI command:
+pipeline (``uv run dc --all``). It is also available as a standalone CLI
+command:
 
-- ``uv run datachallengecapgemini-clustering`` — cluster one asset type
+- ``uv run python -m datachallengecapgemini.clustering`` — cluster one asset type
 """
 
 from __future__ import annotations
@@ -793,11 +793,6 @@ def add_clustering_arguments(parser: argparse.ArgumentParser) -> None:
         default=3,
         help="Step between the tested min_cluster_size values (default: 3).",
     )
-    parser.add_argument(
-        "--skip-clustering",
-        action="store_true",
-        help="Skip the clustering step, assuming the clusterised solar and wind CSVs already exist.",
-    )
 
 
 def run_clustering(args: ClusteringArgs) -> None:
@@ -832,7 +827,7 @@ def run_clustering(args: ClusteringArgs) -> None:
 
 
 def main() -> None:
-    """CLI entry point — ``uv run datachallengecapgemini-clustering``."""
+    """CLI entry point — ``uv run python -m datachallengecapgemini.clustering``."""
     parser = argparse.ArgumentParser(
         description="Lance le clustering sur un CSV d'incidents."
     )

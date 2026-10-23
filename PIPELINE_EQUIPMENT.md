@@ -258,7 +258,7 @@ replaces each marker with the section's markdown and fixes the image paths
 
 ## 4. Full example: OUEST1-INV10
 
-*Real figures from the generated report.* Command: `uv run dc-equipment --site OUEST1`
+*Real figures from the generated report.* Command: `uv run dc equipment --site OUEST1`
 
 **[1] Selection.** OUEST1 has 10 equipment; 6 are critical (INV06, INV03 = P1;
 INV10, INV08, INV04, INV02 = P2). INV10: score vs site 64.3 (< 75), score vs
@@ -373,7 +373,7 @@ of the reader).
    thermography campaigns, spare parts…), conclusion, summary. Methodology and
    annex remain fixed text.
    - plus `templates/site_report.md` with `{{ section_<x> }}` markers;
-   - plus a `dc-site --site OUEST1` command modelled on `main_equipment`.
+   - plus a `dc site --site OUEST1` subcommand modelled on `dc equipment`.
 
 Natural chaining: the site report can receive, as data for one section, the
 summaries already generated for its critical equipment
@@ -410,15 +410,15 @@ DataChallengeCapGemini/
 |-- README.md                    [FLEET+EQUIPMENT] setup and usage;
 |                                "Equipment-level reports" section added
 |-- PIPELINE_EQUIPMENT.md        [EQUIPMENT] this document
-|-- pyproject.toml / uv.lock     dependencies (uv); commands dc,
-|   .python-version              dc-equipment, datachallengecapgemini-preprocess
+|-- pyproject.toml / uv.lock     dependencies (uv); command `dc`
+|   .python-version              (with `preprocess` and `equipment` subcommands)
 |-- .env.example                 Azure credentials template
 |-- .env                         [LOCAL] real credentials, NEVER commit
 |-- .gitignore
 |
 |-- src/datachallengecapgemini/  PYTHON PACKAGE (the "official" code)
 |   |-- __init__.py              main() = uv run dc               [FLEET]
-|   |                            main_equipment() = dc-equipment  [EQUIPMENT]
+|   |                            _run_equipment() = dc equipment  [EQUIPMENT]
 |   |-- preprocessing.py         OCR + PDF parsing                [FLEET]
 |   |-- equipment_stats.py       criticality, #k numbering,       [EQUIPMENT]
 |   |                            statistics and facts
@@ -442,7 +442,7 @@ DataChallengeCapGemini/
 |-- functional_pipeline_test/    teammates' pipeline experiments
 |
 |-- data/                        [LOCAL] incident CSVs (incl. the clusterised
-|                                ones read by dc-equipment), PDFs, data/plots
+|                                ones read by `dc equipment`), PDFs, data/plots
 |-- filled_templates/            [LOCAL] generated fleet reports
 `-- equipment_reports/           [LOCAL] generated equipment reports:
     `-- <SITE>/criticality.csv, <SITE>/<EQUIPMENT>/{report.md, figures/,
@@ -457,13 +457,13 @@ no data and no generated file is versioned.
 | Command | Effect |
 | --- | --- |
 | `uv sync` | install / register commands |
-| `uv run dc-equipment --site OUEST1` | critical equipment of the site |
-| `uv run dc-equipment --site OUEST1 --dry-run` | figures, JSON and prompts, no Azure call |
-| `uv run dc-equipment --site OUEST1 --equipment OUEST1-INV10` | a single equipment |
-| `uv run dc-equipment --site OUEST1 --all-equipment` | every equipment of the site |
-| `uv run dc-equipment --site OUEST1 --force root_causes recommendations` | regenerate only those sections |
-| `uv run dc-equipment --site OUEST1 --language French` | text in French |
-| `uv run dc-equipment --site OUEST1 --pdf` | also a PDF with pandoc |
+| `uv run dc equipment --site OUEST1` | critical equipment of the site |
+| `uv run dc equipment --site OUEST1 --dry-run` | figures, JSON and prompts, no Azure call |
+| `uv run dc equipment --site OUEST1 --equipment OUEST1-INV10` | a single equipment |
+| `uv run dc equipment --site OUEST1 --all-equipment` | every equipment of the site |
+| `uv run dc equipment --site OUEST1 --force root_causes recommendations` | regenerate only those sections |
+| `uv run dc equipment --site OUEST1 --language French` | text in French |
+| `uv run dc equipment --site OUEST1 --pdf` | also a PDF with pandoc |
 
 Requirement: `.env` with `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`,
 `AZURE_OPENAI_API_VERSION` and `AZURE_OPENAI_CHAT_DEPLOYMENT` (see

@@ -11,10 +11,9 @@ The pipeline iterates over every ``plot_*`` method (see
 page in the ``html`` subfolder. Each method's description is saved as JSON in
 the ``json`` subfolder.
 
-Available as a CLI step through the top-level ``datachallengecapgemini``
-entry point:
+Available as a CLI step through the top-level ``dc`` entry point:
 
-- ``uv run datachallengecapgemini`` — preprocessing (optional) + plotting
+- ``uv run dc`` — plotting (clustering is skipped by default; use ``--all`` to recompute)
 """
 
 import argparse
