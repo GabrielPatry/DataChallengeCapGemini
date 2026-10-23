@@ -1081,6 +1081,8 @@ USD_PER_M_OUTPUT_TOKENS = 0.40
 
 SHARED_RULES = """You write one section of an equipment-level incident report for asset managers and maintenance planners of utility-scale photovoltaic plants. The equipment is a PV inverter and the DC field upstream of it.
 
+Write every generated text field in French; the prompts may remain in English.
+
 # Rules
 1. NO CALCULATIONS. Do not add, subtract, average, compare numerically, compute percentages, ratios, durations or date differences. Every number you write must be copied from the input (rounding allowed). If a figure you would like to quote is not in the input, make the point without a number.
 2. `facts` are verified, ready-made sentences: when you quote one of their figures, copy it exactly with the meaning given there (e.g. do not swap "most costly incident" and "most costly failure mode", or the ratio of one indicator for another).
@@ -1320,7 +1322,7 @@ class SectionContext:
     stats: dict
     figures: dict[str, dict]
     sections_dir: Path
-    language: str = "English"
+    language: str = "French"
     client: object | None = None
     deployment: str | None = None
     dry_run: bool = False
@@ -2227,7 +2229,7 @@ def run_equipment_reporting(
     equipment_ids: list[str],
     site_dir: Path,
     templates_dir: Path,
-    language: str = "English",
+    language: str = "French",
     dry_run: bool = False,
     force: list[str] | None = None,
     pdf: bool = False,
@@ -2327,7 +2329,7 @@ def add_equipment_report_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--language",
-        default="English",
+        default="French",
         help="Language of the generated text (headings and tables stay in English).",
     )
     parser.add_argument(
