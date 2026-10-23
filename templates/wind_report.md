@@ -92,6 +92,6 @@ of each event.
 
 {{ recommendations }}
 
-## 6. Conclusion
+## 6. Synthèse générale
 
-{{ conclusion }}
+{{ synthesis }}

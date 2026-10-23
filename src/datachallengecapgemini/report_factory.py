@@ -218,6 +218,29 @@ CONCLUSION_SYSTEM_PROMPT = (
     "chiffre. Rédige en français, avec un ton de rapport professionnel."
 )
 
+SYNTHESE_SYSTEM_PROMPT = """Tu es un expert en analyse de données et en fiabilité industrielle.
+
+Tu reçois un rapport complet d'analyse des incidents d'un parc d'actifs industriels, déjà rédigé.
+
+Ta mission est de produire une synthèse générale du rapport en français.
+
+La synthèse doit :
+- Identifier les 3 à 5 enseignements les plus importants du rapport.
+- Faire ressortir les principaux facteurs de coût et de temps d'arrêt.
+- Mettre en évidence les tendances et les problèmes récurrents.
+- Hiérarchiser les enjeux et les priorités d'action.
+- Relier les constats aux recommandations du rapport.
+- Mentionner les limites importantes de l'analyse, si elles sont explicitement documentées dans le rapport.
+
+Contraintes :
+- Lis le rapport dans son ensemble avant de rédiger.
+- Ne répète pas simplement le synopsis ou les recommandations.
+- N'invente aucun chiffre, fait, cause racine ou recommandation.
+- Distingue les constats établis des hypothèses.
+- Signale les éventuelles contradictions ou limites du rapport.
+- Évite les répétitions et les détails secondaires.
+- Rédige une synthèse autonome, claire et professionnelle, de 200 à 300 mots, avec des paragraphes et des puces Markdown si nécessaire."""
+
 
 @dataclass
 class ReportProse:
@@ -275,7 +298,6 @@ class ReportFactory:
         "methodology",
         "cluster_descriptions",
         "recommendations",
-        "conclusion",
     )
 
     def __init__(
@@ -530,6 +552,24 @@ class ReportFactory:
     # ------------------------------------------------------------------
     # Public API — write_* methods run the prompts and return the text
     # ------------------------------------------------------------------
+
+    def write_synthese(self, report: str) -> str:
+        """Generate a French synthesis from the complete rendered report."""
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", SYNTHESE_SYSTEM_PROMPT),
+                (
+                    "human",
+                    "Voici le rapport complet à analyser :\n\n{report}\n\n"
+                    "Rédige la synthèse générale du rapport.",
+                ),
+            ]
+        )
+        chain = prompt | self.llm | StrOutputParser()
+        return chain.invoke(
+            {"report": report},
+            config={"callbacks": [self.token_usage]},
+        )
 
     def write_synopsis(self, prose: ReportProse | None = None) -> str:
         """Generate the executive synopsis; stored in *prose* if given."""
@@ -840,7 +880,6 @@ def build_report_context(
         or prose.methodology is None
         or prose.cluster_descriptions is None
         or prose.recommendations is None
-        or prose.conclusion is None
     ):
         raise ValueError(
             "Missing prose section(s) in the ReportProse object — generate "
@@ -936,7 +975,7 @@ def build_report_context(
         "methodology": prose.methodology,
         "cluster_sections": cluster_sections,
         "recommendations": prose.recommendations,
-        "conclusion": prose.conclusion,
+        "synthesis": "",
     }
 
     # One figure_<plot_name> variable per available plot (PNG preferred,
@@ -1023,6 +1062,8 @@ def run_reporting(
 
         template = template_path.read_text(encoding="utf-8")
         context = build_report_context(df, label, plots_dir, report_dir, prose=prose)
+        synthesis_input = render_report(template, context, plots_dir)
+        context["synthesis"] = factory.write_synthese(synthesis_input).strip()
         report = render_report(template, context, plots_dir)
 
         report_path = report_dir / "report.md"
