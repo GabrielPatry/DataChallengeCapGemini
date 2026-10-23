@@ -225,7 +225,6 @@ Ta mission est de produire une synthèse générale du rapport en français.
 
 La synthèse doit :
 - Identifier les 3 à 5 enseignements les plus importants du rapport.
-- Faire ressortir les principaux facteurs de coût et de temps d'arrêt.
 - Mettre en évidence les tendances et les problèmes récurrents.
 - Hiérarchiser les enjeux et les priorités d'action.
 - Relier les constats aux recommandations du rapport.
@@ -234,11 +233,12 @@ La synthèse doit :
 Contraintes :
 - Lis le rapport dans son ensemble avant de rédiger.
 - Ne répète pas simplement le synopsis ou les recommandations.
+- Faire ressortir les principaux facteurs de coût et de temps d'arrêt.
 - N'invente aucun chiffre, fait, cause racine ou recommandation.
 - Distingue les constats établis des hypothèses.
 - Signale les éventuelles contradictions ou limites du rapport.
 - Évite les répétitions et les détails secondaires.
-- Rédige une synthèse autonome, claire et professionnelle, de 200 à 300 mots, avec des paragraphes et des puces Markdown si nécessaire."""
+- Rédige une synthèse autonome, claire et professionnelle, de 120 à 200 mots, avec des paragraphes et des puces Markdown si nécessaire."""
 
 
 @dataclass

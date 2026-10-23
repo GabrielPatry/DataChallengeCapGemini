@@ -2,6 +2,7 @@
 
 **Asset type:** {{ asset_label }} · **Generated on:** {{ generation_date }}
 
+## Synopsis
 > {{ synopsis }}
 
 ---
