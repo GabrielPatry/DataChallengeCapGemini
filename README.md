@@ -67,7 +67,7 @@ to it and run the preprocessing command:
 
 ```bash
 export SURYA_INFERENCE_URL=http://127.0.0.1:8080/v1
-uv run datachallengecapgemini-preprocess
+uv run dc preprocess
 ```
 
 Preprocessing does not start the server or download the model. It stops with
@@ -168,19 +168,37 @@ The starter kit only uses the `text` subset (~600 reports) to get you started qu
 
 ## Running the pipeline
 
-The full pipeline can be runned using:
+The CLI is a single command, `dc`, with subcommands for specific tasks:
+
+| Command | Description |
+|---------|-------------|
+| `uv run dc` | Main pipeline: plotting → reporting → PDF export |
+| `uv run dc --all` | Main pipeline, recomputing every step (including clustering) |
+| `uv run dc preprocess` | Preprocessing only: OCR scanned PDFs and parse them into a merged CSV |
+| `uv run dc equipment --site OUEST1` | Equipment-level reports (see below) |
+
+### Main pipeline
 
 ```bash
 uv run dc
 ```
 
-`dc` is a short alias for the `datachallengecapgemini` command.
-
-By default, plotting skips preprocessing and reads the pre-existing
-`data/incidents_clusterised_solar.csv` and
+By default, `dc` skips the clustering step (the only CSV → CSV step) and
+reads the pre-existing `data/incidents_clusterised_solar.csv` and
 `data/incidents_clusterised_wind.csv` files. Override their locations with
 `--solar-csv` and `--wind-csv`. Solar and wind plots are written separately
 under `data/plots/solar` and `data/plots/wind`.
+
+To recompute every step — including clustering, which turns the merged
+incidents CSV into the clusterised solar and wind CSVs — use `--all`:
+
+```bash
+uv run dc --all
+```
+
+Preprocessing is intentionally **not** part of the main pipeline; run it
+separately with `dc preprocess` (see [Prerequisites](#prerequisites) for the
+Surya server setup).
 
 The pipeline ends with a report-generation step: it fills the markdown
 templates in `templates/` (`solar_report.md`, `wind_report.md`) with
@@ -198,11 +216,47 @@ pandoc, producing `filled_templates/solar/report.pdf` and
 requires `pandoc` and a PDF engine (see [Prerequisites](#prerequisites));
 skip it with `--skip-pdf`.
 
-You can also start the preprocessing only using:
+### Preprocessing
 
 ```bash
-uv run datachallengecapgemini-preprocess
+uv run dc preprocess
 ```
+
+### Equipment-level reports (solar)
+
+One report per critical equipment of a site, written section by section by
+specialised Azure OpenAI agents:
+
+```bash
+uv run dc equipment --site OUEST1             # critical equipment of the site
+uv run dc equipment --site OUEST1 --dry-run   # figures, JSON and prompts, no Azure call
+uv run dc equipment --site OUEST1 --equipment OUEST1-INV10 --force root_causes
+```
+
+1. **Selection** (`equipment_stats.py`): every equipment gets a 0-100
+   criticality score (incidents, severe incidents ×2, cost, downtime) against
+   its site and against the fleet; it is critical (P1/P2) when one of them
+   reaches 75. `--all-equipment` reports on every equipment of the site.
+2. **Plotting** (`plot_factory.EquipmentPlotFactory`): like `PlotFactory`,
+   each `plot_*` method returns a plotly figure and a dictionary (here the
+   data drawn). For each equipment: `figures/png/<name>.png`,
+   `figures/html/<name>.html`, `json/<name>.json`, plus `json/stats.json`
+   with every statistic of the report.
+3. **Reporting** (`report_factory`): one `section_*` function per section,
+   each asking its own agent (role + shared rules, the section's questions
+   and only its statistics and figure JSON). The agents never calculate;
+   priorities, risk level and confidence are decided in Python, and every
+   answer is checked (numbers absent from the input, wrong incident numbers,
+   P1 failure modes without action) with one automatic correction round.
+   Sections are saved in `sections/<name>.md` and assembled into `report.md`
+   with `templates/equipment/equipment_report.md`.
+
+Input: `data/incidents_clusterised_solar.csv` (written by the clustering step
+of `uv run dc --all`; override with `--solar-csv`). Outputs go to
+`equipment_reports/<site>/<equipment>/` (gitignored). Agent answers are cached
+in `sections/` and only requested again when their prompt changes (or with
+`--force [SECTION ...]`). Full documentation: `PIPELINE_EQUIPMENT.md`;
+walkthrough: `uv run marimo edit notebooks/equipment_pipeline_walkthrough.py`.
 
 ## Running the notebook
 
@@ -287,9 +341,12 @@ See [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/azu
 | `uv sync` | Install / update all dependencies |
 | `uv sync --dev` | Install including dev dependencies (marimo,ruff,ty) |
 | `uv add <package>` | Add a new dependency |
+| `uv run dc` | Run the main pipeline (plotting → reporting → PDF) |
+| `uv run dc --all` | Recompute every step, including clustering |
+| `uv run dc preprocess` | Run preprocessing (OCR + parse PDFs into a CSV) |
+| `uv run dc equipment --site OUEST1` | Equipment-level reports for a site |
 | `uv run marimo edit notebooks/starterkit_students.py` | Edit the notebook |
 | `uv run marimo run notebooks/starterkit_students.py` | Run the notebook (read-only app mode) |
-| `uv run python -m datachallengecapgemini` | Run the package entry point |
 
 ## Tech stack
 
