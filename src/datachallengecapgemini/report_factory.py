@@ -233,7 +233,7 @@ Contraintes :
 - Signale les éventuelles contradictions ou limites du rapport.
 - Évite les répétitions et les détails secondaires.
 - Rédige une synthèse autonome, claire et professionnelle,
-  de 200 à 300 mots, avec des paragraphes et des puces Markdown
+  de 100 à 150 mots, avec des paragraphes et des puces Markdown
   si nécessaire.
 """
 
@@ -1067,11 +1067,19 @@ def run_reporting(
         # 2. Ask the synthesis agent to read the complete report
         synthese = factory.write_synthese(report)
 
-        # 3. Append the synthesis to the final report
+
+        # 3. Keep the first three lines, then insert the synthesis
+        lines = report.lstrip().splitlines()
+
+        header = "\n".join(lines[:3])
+        rest = "\n".join(lines[3:]).lstrip()
+
         report = (
-            report.rstrip()
+            header
             + "\n\n## Synthèse générale\n\n"
             + synthese.strip()
+            + "\n\n"
+            + rest
             + "\n"
         )
 
