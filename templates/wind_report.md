@@ -1,109 +1,109 @@
 # {{ report_title }}
 
-**Asset type:** {{ asset_label }} · **Generated on:** {{ generation_date }}
+**Type d’actif :** {{ asset_label }} · **Généré le :** {{ generation_date }}
 
 ## Synopsis
+
 > {{ synopsis }}
 
 ---
 
-## 1. Key figures
+## 1. Chiffres clés
 
-| Indicator | Value |
+| Indicateur | Valeur |
 | --- | ---: |
-| Incidents analysed | {{ n_incidents }} |
-| Sites covered | {{ n_sites }} |
-| Equipment monitored | {{ n_equipment }} |
-| Period covered | {{ period_start }} → {{ period_end }} |
-| Total estimated cost | {{ total_cost_eur }} EUR |
-| Total downtime | {{ total_downtime_hours }} h |
-| Average cost per incident | {{ avg_cost_per_incident }} EUR |
-| Median cost per incident | {{ median_cost_per_incident }} EUR |
-| Average downtime per incident | {{ avg_downtime_per_incident }} h |
-| Median downtime per incident | {{ median_downtime_per_incident }} h |
-| Average cost per downtime hour | {{ avg_cost_per_downtime_hour }} EUR/h |
+| Nombre d’incidents analysés | {{ n_incidents }} |
+| Nombre de sites couverts | {{ n_sites }} |
+| Nombre d’éoliennes surveillées | {{ n_equipment }} |
+| Période couverte | {{ period_start }} → {{ period_end }} |
+| Coût total estimé | {{ total_cost_eur }} EUR |
+| Durée totale d’indisponibilité | {{ total_downtime_hours }} h |
+| Coût moyen par incident | {{ avg_cost_per_incident }} EUR |
+| Coût médian par incident | {{ median_cost_per_incident }} EUR |
+| Durée moyenne d’indisponibilité par incident | {{ avg_downtime_per_incident }} h |
+| Durée médiane d’indisponibilité par incident | {{ median_downtime_per_incident }} h |
+| Coût moyen par heure d’indisponibilité | {{ avg_cost_per_downtime_hour }} EUR/h |
 
-**Severity breakdown:** {{ n_minor }} minor · {{ n_moderate }} moderate · {{ n_severe }} severe
+**Répartition par niveau de sévérité :** {{ n_minor }} mineurs · {{ n_moderate }} modérés · {{ n_severe }} sévères
 
-**Most costly site:** {{ top_site_by_cost }} — **most costly turbine:** {{ top_equipment_by_cost }}
+**Site le plus coûteux :** {{ top_site_by_cost }} — **Éolienne la plus coûteuse :** {{ top_equipment_by_cost }}
 
 {{ figure_plot_yearly_incidents }}
-*Annual Incident Trends and Estimated Total Costs.*
+
+*Évolution annuelle du nombre d’incidents et des coûts totaux estimés.*
 
 {{ figure_plot_yearly_variation }}
 
-*Year-over-Year Change in Incident Costs and Downtime.*
+*Variation annuelle des coûts des incidents et de la durée d’indisponibilité.*
 
-## 2. Cost analysis
+## 2. Analyse des coûts
 
 {{ methodology }}
 
-### 2.1 Cost per site
+### 2.1 Coût par site
 
 {{ figure_plot_total_cost_by_site }}
 
-*Total estimated cost per wind farm, split by asset type.*
+*Coût total estimé par parc éolien, ventilé par type d’actif.*
 
-### 2.2 Cost distribution per turbine
+### 2.2 Distribution des coûts par éolienne
 
 {{ figure_plot_cost_distribution_per_equipment_by_site }}
 
-*Distribution of the total estimated cost per turbine, grouped by site.*
+*Distribution du coût total estimé par éolienne, regroupée par site.*
 
-### 2.3 Daily cost of the most impacted turbine
+### 2.3 Coût quotidien de l’éolienne la plus impactée
 
 {{ figure_plot_daily_cost_for_equipment }}
 
-*Daily estimated cost over time for the turbine with the highest total cost.*
+*Évolution quotidienne du coût estimé pour l’éolienne présentant le coût total le plus élevé.*
 
-### 2.4 Top turbines at the highest-cost site
+### 2.4 Principales éoliennes du site le plus coûteux
 
 {{ figure_plot_daily_cost_top_equipment_at_top_site }}
 
-*Daily estimated cost of the top-3 turbines at the site with the highest total cost.*
+*Coût quotidien estimé des trois éoliennes les plus coûteuses du site présentant le coût total le plus élevé.*
 
-### 2.5 Downtime vs cost
+### 2.5 Indisponibilité et coût
 
 {{ figure_plot_downtime_vs_cost }}
 
-*Estimated cost against downtime duration, coloured by severity.*
+*Coût estimé en fonction de la durée d’indisponibilité, avec une distinction par niveau de sévérité.*
 
-## 3. Weather exposure
+## 3. Exposition aux conditions météorologiques
 
-Wind assets are directly exposed to meteorological conditions: the figures
-below relate incident dynamics and costs to the weather recorded at the time
-of each event.
+Les éoliennes sont directement exposées aux conditions météorologiques. Les graphiques ci-dessous mettent en relation la dynamique des incidents et leurs coûts avec les conditions météorologiques enregistrées au moment de chaque événement.
 
-### 3.1 Cost by weather condition
+### 3.1 Coût par condition météorologique
 
 {{ figure_plot_total_cost_by_weather_condition }}
 
-*Total estimated cost per weather condition, split by asset type — storm-related conditions stand out.*
+*Coût total estimé par condition météorologique, ventilé par type d’actif — les conditions liées aux tempêtes se distinguent notamment.*
 
-### 3.2 Monthly incident count
+### 3.2 Nombre mensuel d’incidents
 
 {{ figure_plot_monthly_incident_count }}
 
-*Number of incidents per month over the period, split by asset type.*
+*Nombre d’incidents par mois sur la période étudiée, ventilé par type d’actif.*
 
-### 3.3 Incidents by severity
+### 3.3 Incidents par niveau de sévérité
 
 {{ figure_plot_incident_count_by_severity }}
 
-*Number of incidents per severity level, split by asset type.*
+*Nombre d’incidents par niveau de sévérité, ventilé par type d’actif.*
 
-## 4. Thematic clusters
+## 4. Clusters thématiques
 
-{{ n_clusters }} incident clusters were identified from the report descriptions.
+{{ n_clusters }} groupes thématiques d’incidents (*clusters*) ont été identifiés à partir des descriptions des rapports.
 
 {{ top_clusters_table }}
 
 {{ cluster_sections }}
 
-## 5. Recommendations
+## 5. Recommandations
 
 {{ recommendations }}
 
-## 6. Synthesis
+## 6. Synthèse
 
 {{ synthesis }}
