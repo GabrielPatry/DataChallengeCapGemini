@@ -143,14 +143,26 @@ class TokenUsageCallback(BaseCallbackHandler):
 
 
 SYNOPSIS_SYSTEM_PROMPT = (
-    "Tu es le rédacteur technique d'un rapport d'analyse d'incidents sur "
-    "des actifs industriels. Rédige un synopsis exécutif concis (un "
-    "paragraphe de 80 à 120 mots) pour le parc {label} : les thèmes "
-    "d'incidents dominants et leur poids dans le coût estimé et le temps "
-    "d'arrêt. Utilise uniquement les statistiques, le résumé des clusters et "
-    "les descriptions des figures "
-    "fournis, n'invente aucun chiffre. Rédige en français, avec un ton de "
-    "rapport professionnel."
+    "Tu es le rédacteur technique d'un rapport d'analyse d'incidents "
+"sur des actifs industriels. Rédige un synopsis exécutif concis "
+"(un paragraphe de 100 à 200 mots) pour le parc {label}.\n\n"
+
+"Le synopsis doit présenter :\n"
+"- les principaux thèmes d'incidents et leur poids dans le coût "
+"estimé et le temps d'arrêt, à partir des statistiques et du résumé "
+"des clusters ;\n"
+"- les chiffres clés de la performance globale : nombre total "
+"d'incidents, coût total estimé, temps d'arrêt total, répartition "
+"par sévérité et coût moyen par incident ;\n"
+"- l'évolution annuelle, en mettant en évidence la variation du "
+"coût total et du temps d'arrêt entre les deux dernières années "
+"disponibles, si ces données sont fournies.\n\n"
+
+"Utilise uniquement les statistiques, le résumé des clusters et "
+"les descriptions des figures fournis. N'invente aucun chiffre et "
+"ne déduis pas de causalité non démontrée. Priorise les informations "
+"les plus significatives plutôt que d'énumérer toutes les statistiques. "
+"Rédige en français, avec un ton professionnel, analytique et concis."
 )
 
 METHODOLOGY_SYSTEM_PROMPT = (
@@ -238,7 +250,7 @@ Contraintes :
 - Distingue les constats établis des hypothèses.
 - Signale les éventuelles contradictions ou limites du rapport.
 - Évite les répétitions et les détails secondaires.
-- Rédige une synthèse autonome, claire et professionnelle, de 120 à 200 mots, avec des paragraphes et des puces Markdown si nécessaire."""
+- Rédige une synthèse autonome, claire et professionnelle, de 150 à 250 mots, avec des paragraphes et des puces Markdown si nécessaire."""
 
 
 @dataclass
@@ -316,6 +328,8 @@ class ReportFactory:
         self.llm = llm if llm is not None else self._default_llm()
         # Context elements shared by every agent
         self.statistics = self._render_statistics()
+        print("\n===== STATISTIQUES DU PARC =====")
+        print(self.statistics)
         self.cluster_table = self._compute_cluster_table()
         self.clusters = self._render_clusters()
 
@@ -343,33 +357,117 @@ class ReportFactory:
     # ------------------------------------------------------------------
 
     def _render_statistics(self) -> str:
-        """Render the key fleet statistics as a text block for the agents."""
-        df = self.df
-        dates = pd.to_datetime(df["date"])
-        severity_counts = df["severity"].value_counts()
+        """Render global and yearly fleet statistics for the agents."""
+        df = self.df.copy()
+
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+
+        # Global statistics
+        total_incidents = len(df)
         total_cost = df["estimated_cost_eur"].sum()
         total_downtime = df["downtime_hours"].sum()
+
+        severity_counts = df["severity"].value_counts()
+
         top_site = df.groupby("site")["estimated_cost_eur"].sum().idxmax()
-        top_equipment = df.groupby("equipment_id")["estimated_cost_eur"].sum().idxmax()
+        top_equipment = (
+            df.groupby("equipment_id")["estimated_cost_eur"].sum().idxmax()
+        )
+
         severity_breakdown = ", ".join(
             f"{level}: {int(severity_counts.get(level, 0))}"
             for level in SEVERITY_LEVELS
         )
+
+        # Mean and median values
+        mean_cost = df["estimated_cost_eur"].mean()
+        median_cost = df["estimated_cost_eur"].median()
+
+        mean_downtime = df["downtime_hours"].mean()
+        median_downtime = df["downtime_hours"].median()
+
+        # Cost per downtime hour
+        cost_per_hour = (
+            total_cost / total_downtime
+            if total_downtime > 0
+            else None
+        )
+
+        # Yearly statistics
+        yearly = (
+            df.groupby("year")
+            .agg(
+                incidents=("date", "size"),
+                cost=("estimated_cost_eur", "sum"),
+                downtime=("downtime_hours", "sum"),
+            )
+            .sort_index()
+        )
+
         lines = [
-            f"- Incidents analysés : {len(df)}",
+            "PERFORMANCE GLOBALE",
+            f"- Nombre total d'incidents : {total_incidents}",
             f"- Sites couverts : {df['site'].nunique()}",
             f"- Équipements surveillés : {df['equipment_id'].nunique()}",
             (
-                f"- Période : {dates.min().date().isoformat()} "
-                f"à {dates.max().date().isoformat()}"
+                f"- Période analysée : {df['date'].min().date().isoformat()} "
+                f"à {df['date'].max().date().isoformat()}"
             ),
             f"- Coût total estimé : {total_cost:,.2f} EUR",
             f"- Temps d'arrêt total : {total_downtime:,.1f} h",
-            f"- Coût moyen par incident : {total_cost / len(df):,.2f} EUR",
+            f"- Coût moyen par incident : {mean_cost:,.2f} EUR",
+            f"- Coût médian par incident : {median_cost:,.2f} EUR",
+            f"- Temps d'arrêt moyen par incident : {mean_downtime:,.2f} h",
+            f"- Temps d'arrêt médian par incident : {median_downtime:,.2f} h",
+            (
+                f"- Coût moyen par heure d'arrêt : {cost_per_hour:,.2f} EUR/h"
+                if cost_per_hour is not None
+                else "- Coût par heure d'arrêt : non calculable"
+            ),
             f"- Répartition par sévérité : {severity_breakdown}",
             f"- Site le plus coûteux : {top_site}",
             f"- Équipement le plus coûteux : {top_equipment}",
+            "",
+            "STATISTIQUES ANNUELLES",
         ]
+
+        for year, row in yearly.iterrows():
+            lines.append(
+                f"- {year} : {int(row['incidents'])} incidents, "
+                f"{row['downtime']:,.1f} h d'arrêt, "
+                f"{row['cost']:,.2f} EUR de coût"
+            )
+
+        # Compare the last two available years
+        lines.append("")
+        lines.append("VARIATION ANNUELLE")
+
+        if len(yearly) >= 2:
+            last_year = yearly.index[-1]
+            previous_year = yearly.index[-2]
+
+            last = yearly.loc[last_year]
+            previous = yearly.loc[previous_year]
+
+            def percentage_change(current, prior):
+                if prior == 0:
+                    return "non calculable (valeur de référence nulle)"
+                return f"{(current - prior) / prior * 100:+.2f} %"
+
+            lines.append(
+                f"- Temps d'arrêt ({last_year} vs {previous_year}) : "
+                f"{percentage_change(last['downtime'], previous['downtime'])}"
+            )
+            lines.append(
+                f"- Coût ({last_year} vs {previous_year}) : "
+                f"{percentage_change(last['cost'], previous['cost'])}"
+            )
+        else:
+            lines.append(
+                "- Comparaison impossible : moins de deux années disponibles."
+            )
+
         return "\n".join(lines)
 
     def _compute_cluster_table(self) -> pd.DataFrame:
@@ -890,14 +988,23 @@ def build_report_context(
     cluster_descriptions = prose.cluster_descriptions
     if not isinstance(cluster_descriptions, list):
         raise TypeError("The 'cluster_descriptions' prose value must be a list.")
+    
+    median_cost = df["estimated_cost_eur"].median()
+    mean_downtime = df["downtime_hours"].mean()
+    median_downtime = df["downtime_hours"].median()
+    total_downtime = df["downtime_hours"].sum()
 
     n_incidents = len(df)
     severity_counts = df["severity"].value_counts()
     total_cost = df["estimated_cost_eur"].sum()
-    total_downtime = df["downtime_hours"].sum()
     dates = pd.to_datetime(df["date"])
     top_site = df.groupby("site")["estimated_cost_eur"].sum().idxmax()
     top_equipment = df.groupby("equipment_id")["estimated_cost_eur"].sum().idxmax()
+    cost_per_hour= (
+            total_cost / total_downtime
+            if total_downtime > 0
+            else "non calculable"
+        )
 
     # Clusters, largest first; the noise cluster is reported separately
     cluster_counts = (
@@ -977,6 +1084,10 @@ def build_report_context(
         "cluster_sections": cluster_sections,
         "recommendations": prose.recommendations,
         "synthesis": "",
+        "median_cost_per_incident":f"{median_cost:,.2f}",
+        "avg_downtime_per_incident":f"{mean_downtime:,.2f}",
+        "median_downtime_per_incident":f"{median_downtime:,.2f}",
+        "avg_cost_per_downtime_hour":f"{cost_per_hour:,.2f}"
     }
 
     # One figure_<plot_name> variable per available plot (PNG preferred,

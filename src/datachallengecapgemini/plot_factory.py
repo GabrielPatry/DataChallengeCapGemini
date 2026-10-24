@@ -506,6 +506,261 @@ class PlotFactory:
         return fig, description
 
 
+    def plot_yearly_cost(self) -> tuple[go.Figure, dict[str, object]]:
+        """Annual total estimated cost across the fleet."""
+        df = self.df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+        yearly = (
+            df.groupby("year")["estimated_cost_eur"]
+            .sum()
+            .rename("total_cost_eur")
+            .reset_index()
+        )
+
+        fig = px.bar(
+            yearly,
+            x="year",
+            y="total_cost_eur",
+            text=yearly["total_cost_eur"].map(lambda value: f"{value:,.0f} €"),
+            title="Évolution annuelle du coût estimé",
+            labels={"year": "Année", "total_cost_eur": "Coût estimé (EUR)"},
+        )
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(template="plotly_white", showlegend=False)
+        fig.update_xaxes(type="category")
+        fig.update_yaxes(rangemode="tozero", tickformat=",.0f", gridcolor="#e4e3df")
+
+        description = {
+            "title": "Évolution annuelle du coût estimé",
+            "chart_type": "diagramme à barres annuel",
+            "main_features": (
+                "Somme des coûts estimés des incidents pour chaque année."
+            ),
+            "yearly_costs": [
+                {"year": int(row["year"]), "total_cost_eur": round(float(row["total_cost_eur"]), 2)}
+                for _, row in yearly.iterrows()
+            ],
+        }
+        return fig, description
+
+    def plot_yearly_downtime(self) -> tuple[go.Figure, dict[str, object]]:
+        """Annual total downtime across the fleet."""
+        df = self.df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+        yearly = (
+            df.groupby("year")["downtime_hours"]
+            .sum()
+            .rename("total_downtime_hours")
+            .reset_index()
+        )
+
+        fig = px.bar(
+            yearly,
+            x="year",
+            y="total_downtime_hours",
+            text=yearly["total_downtime_hours"].map(lambda value: f"{value:,.1f} h"),
+            title="Évolution annuelle du temps d'arrêt",
+            labels={"year": "Année", "total_downtime_hours": "Temps d'arrêt (h)"},
+        )
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        fig.update_layout(template="plotly_white", showlegend=False)
+        fig.update_xaxes(type="category")
+        fig.update_yaxes(rangemode="tozero", gridcolor="#e4e3df")
+
+        description = {
+            "title": "Évolution annuelle du temps d'arrêt",
+            "chart_type": "diagramme à barres annuel",
+            "main_features": (
+                "Somme des heures d'arrêt recensées pour chaque année."
+            ),
+            "yearly_downtime": [
+                {"year": int(row["year"]), "total_downtime_hours": round(float(row["total_downtime_hours"]), 1)}
+                for _, row in yearly.iterrows()
+            ],
+        }
+        return fig, description
+
+    def plot_yearly_incidents(self) -> tuple[go.Figure, dict[str, object]]:
+        """Annual incident count (blue bars) and estimated cost (red line)."""
+        df = self.df.copy()
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.dropna(subset=["date"])
+        df["year"] = df["date"].dt.year
+
+        aggregations = {"incident_count": ("date", "size")}
+        if "estimated_cost_eur" not in df.columns:
+            raise KeyError("La colonne 'estimated_cost_eur' est nécessaire pour le graphique annuel combiné.")
+
+        yearly = (
+            df.groupby("year")
+            .agg(
+                incident_count=("date", "size"),
+                total_cost_eur=("estimated_cost_eur", "sum"),
+            )
+            .reset_index()
+            .sort_values("year")
+        )
+        yearly["total_cost_eur"] = pd.to_numeric(yearly["total_cost_eur"], errors="coerce").fillna(0)
+        years = yearly["year"].astype(str)
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=years,
+                y=yearly["incident_count"],
+                name="Nombre d'incidents",
+                marker_color="#4472C4",
+                text=yearly["incident_count"],
+                textposition="outside",
+                yaxis="y",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=years,
+                y=yearly["total_cost_eur"],
+                name="Coût total estimé",
+                mode="lines+markers+text",
+                line={"color": "#D62728", "width": 3},
+                marker={"size": 9, "color": "#D62728"},
+                text=[f"{value:,.0f} €".replace(",", " ") for value in yearly["total_cost_eur"]],
+                # Décaler la dernière étiquette pour éviter le chevauchement
+                # avec le nombre d'incidents affiché au-dessus de la barre.
+                textposition=["top center", "top center", "middle left"]
+                if len(yearly) >= 3 else "top center",
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            template="plotly_white",
+            title="Évolution annuelle des incidents et du coût estimé",
+            xaxis={"title": "Année", "type": "category"},
+            yaxis={
+                "title": "Nombre d'incidents",
+                "rangemode": "tozero",
+                "showgrid": True,
+                "gridcolor": "#e4e3df",
+            },
+            yaxis2={
+                "title": "Coût total estimé (€)",
+                "overlaying": "y",
+                "side": "right",
+                "rangemode": "tozero",
+                "showgrid": False,
+                "tickformat": ",.0f",
+            },
+            barmode="group",
+            legend={"orientation": "h", "y": 1.12, "x": 0},
+            margin={"t": 120, "r": 110, "b": 60},
+        )
+
+        description = {
+            "title": "Évolution annuelle des incidents et du coût estimé",
+            "chart_type": "barres bleues pour le nombre d'incidents et courbe rouge pour le coût total, avec deux axes Y",
+            "main_features": "Compare le nombre annuel d'incidents au coût estimé total correspondant.",
+            "yearly_incidents_and_cost": [
+                {
+                    "year": int(row["year"]),
+                    "incident_count": int(row["incident_count"]),
+                    "total_cost_eur": float(row["total_cost_eur"]),
+                }
+                for _, row in yearly.iterrows()
+            ],
+        }
+        return fig, description
+
+    def plot_yearly_variation(self) -> tuple[go.Figure, dict[str, object]]:
+        """Percentage change in cost and downtime between the two latest years."""
+        df = self.df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+        yearly = (
+            df.groupby("year")
+            .agg(
+                cost=("estimated_cost_eur", "sum"),
+                downtime=("downtime_hours", "sum"),
+            )
+            .sort_index()
+        )
+
+        if len(yearly) < 2:
+            fig = go.Figure()
+            fig.add_annotation(
+                text="Deux années au minimum sont nécessaires pour calculer la variation.",
+                x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False,
+            )
+            fig.update_layout(
+                template="plotly_white",
+                title="Variation annuelle du coût et du temps d'arrêt",
+            )
+            return fig, {
+                "title": "Variation annuelle du coût et du temps d'arrêt",
+                "chart_type": "diagramme à barres de variation en pourcentage",
+                "main_features": "Variation non calculable : moins de deux années disponibles.",
+                "variation": None,
+            }
+
+        previous_year, last_year = int(yearly.index[-2]), int(yearly.index[-1])
+        previous, current = yearly.iloc[-2], yearly.iloc[-1]
+
+        def pct_change(current_value: float, previous_value: float) -> float | None:
+            if previous_value == 0:
+                return None
+            return round((current_value - previous_value) / previous_value * 100, 2)
+
+        cost_change = pct_change(float(current["cost"]), float(previous["cost"]))
+        downtime_change = pct_change(
+            float(current["downtime"]), float(previous["downtime"])
+        )
+
+        labels, values = [], []
+        if cost_change is not None:
+            labels.append("Coût estimé")
+            values.append(cost_change)
+        if downtime_change is not None:
+            labels.append("Temps d'arrêt")
+            values.append(downtime_change)
+
+        colors = ["#2a78d6" if value >= 0 else "#d95f59" for value in values]
+        fig = go.Figure(
+            go.Bar(
+                x=labels,
+                y=values,
+                marker_color=colors,
+                text=[f"{value:+.2f} %" for value in values],
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="%{x}<br>Variation : %{y:+.2f} %<extra></extra>",
+            )
+        )
+        fig.add_hline(y=0, line_color="#777777", line_width=1)
+        fig.update_layout(
+            template="plotly_white",
+            title=f"Variation annuelle : {last_year} vs {previous_year}",
+            yaxis_title="Variation (%)",
+            xaxis_title="Indicateur",
+            showlegend=False,
+        )
+        fig.update_yaxes(ticksuffix=" %", gridcolor="#e4e3df")
+
+        description = {
+            "title": f"Variation annuelle : {last_year} vs {previous_year}",
+            "chart_type": "diagramme à barres de variation en pourcentage",
+            "main_features": (
+                "Compare les variations du coût estimé et du temps d'arrêt "
+                "entre les deux dernières années disponibles."
+            ),
+            "comparison_years": {"previous": previous_year, "current": last_year},
+            "variation": {
+                "cost_pct": cost_change,
+                "downtime_pct": downtime_change,
+            },
+        }
+        return fig, description
+
+
 class SolarPlotFactory(PlotFactory):
     """Build plots from the clusterised solar incidents dataframe."""
 

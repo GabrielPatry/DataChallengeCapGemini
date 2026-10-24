@@ -13,15 +13,26 @@
 | --- | ---: |
 | Incidents analysed | {{ n_incidents }} |
 | Sites covered | {{ n_sites }} |
-| Turbines monitored | {{ n_equipment }} |
+| Equipment monitored | {{ n_equipment }} |
 | Period covered | {{ period_start }} → {{ period_end }} |
 | Total estimated cost | {{ total_cost_eur }} EUR |
 | Total downtime | {{ total_downtime_hours }} h |
 | Average cost per incident | {{ avg_cost_per_incident }} EUR |
+| Median cost per incident | {{ median_cost_per_incident }} EUR |
+| Average downtime per incident | {{ avg_downtime_per_incident }} h |
+| Median downtime per incident | {{ median_downtime_per_incident }} h |
+| Average cost per downtime hour | {{ avg_cost_per_downtime_hour }} EUR/h |
 
 **Severity breakdown:** {{ n_minor }} minor · {{ n_moderate }} moderate · {{ n_severe }} severe
 
 **Most costly site:** {{ top_site_by_cost }} — **most costly turbine:** {{ top_equipment_by_cost }}
+
+{{ figure_plot_yearly_incidents }}
+*Annual Incident Trends and Estimated Total Costs.*
+
+{{ figure_plot_yearly_variation }}
+
+*Year-over-Year Change in Incident Costs and Downtime.*
 
 ## 2. Cost analysis
 
@@ -93,6 +104,6 @@ of each event.
 
 {{ recommendations }}
 
-## 6. Synthèse générale
+## 6. Synthesis
 
 {{ synthesis }}
