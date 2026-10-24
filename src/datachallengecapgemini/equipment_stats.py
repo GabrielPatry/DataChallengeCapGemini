@@ -70,37 +70,37 @@ OVER_REPRESENTED = 1.3
 UNDER_REPRESENTED = 0.7
 
 SEASONS: dict[int, str] = {
-    12: "winter",
-    1: "winter",
-    2: "winter",
-    3: "spring",
-    4: "spring",
-    5: "spring",
-    6: "summer",
-    7: "summer",
-    8: "summer",
-    9: "autumn",
-    10: "autumn",
-    11: "autumn",
+    12: "hiver",
+    1: "hiver",
+    2: "hiver",
+    3: "printemps",
+    4: "printemps",
+    5: "printemps",
+    6: "été",
+    7: "été",
+    8: "été",
+    9: "automne",
+    10: "automne",
+    11: "automne",
 }
 
 # Noise cluster of the clustering step (incidents without a clear failure
 # mode) and the label they get in the equipment reports
 NOISE_CLUSTER_CODE = "C_NOISE"
-UNCLASSIFIED = "Unclassified (no failure mode)"
+UNCLASSIFIED = "Non classé (pas de mode de défaillance)"
 
 # Priority of a recommendation = priority of the failure mode it addresses
 PRIORITY_RULES: dict[str, str] = {
     "P1": (
-        "within 1 month: the failure mode caused at least one severe incident on "
-        f"this equipment and either represents >= 20% of its cost or recurred "
-        f"within {RECURRENCE_DAYS} days"
+        "dans le mois : le mode de défaillance a causé au moins un incident "
+        f"sévère sur cet équipement et représente >= 20 % de son coût ou est "
+        f"revenu à moins de {RECURRENCE_DAYS} jours"
     ),
     "P2": (
-        "within 6 months: the failure mode caused at least one severe incident "
-        "or represents >= 10% of the cost"
+        "dans les 6 mois : le mode de défaillance a causé au moins un incident "
+        "sévère ou représente >= 10 % du coût"
     ),
-    "P3": "next yearly maintenance plan: all other failure modes",
+    "P3": "prochain plan de maintenance annuel : tous les autres modes de défaillance",
 }
 
 
@@ -207,8 +207,8 @@ def compute_criticality(df: pd.DataFrame) -> pd.DataFrame:
             eq["equipment_priority"] == "P2",
             eq[["score_site", "score_fleet"]].max(axis=1) >= 50,
         ],
-        ["critical", "high", "medium"],
-        default="low",
+        ["critique", "élevé", "moyen"],
+        default="faible",
     )
     return eq.sort_values(["site", "score_site"], ascending=[True, False]).reset_index(
         drop=True
@@ -284,17 +284,17 @@ def site_focus(df: pd.DataFrame, site: str) -> pd.DataFrame:
 def representation(lift: float | None) -> str:
     """Plain-language reading of a lift (share on the equipment / share on the site)."""
     if lift is None:
-        return "not observed on the rest of the site"
+        return "non observé sur le reste du site"
     if lift >= OVER_REPRESENTED:
-        return "over-represented vs site"
+        return "sur-représenté vs site"
     if lift <= UNDER_REPRESENTED:
-        return "under-represented vs site"
-    return "in line with site"
+        return "sous-représenté vs site"
+    return "conforme au site"
 
 
 def sample_flag(n: int) -> str:
     return (
-        f"indicative only (fewer than {SAMPLE_THRESHOLD} incidents)"
+        f"indicatif uniquement (moins de {SAMPLE_THRESHOLD} incidents)"
         if n < SAMPLE_THRESHOLD
         else "ok"
     )
@@ -357,20 +357,20 @@ def failure_mode_priority(
 ) -> tuple[str, str]:
     """Priority of a failure mode (see ``PRIORITY_RULES``) and the reason for it."""
     if n_severe >= 1 and (cost_share_pct >= 20 or recurrences >= 1):
-        reasons = [f"{n_severe} severe incident(s)"]
+        reasons = [f"{n_severe} incident(s) sévère(s)"]
         if cost_share_pct >= 20:
-            reasons.append(f"{cost_share_pct}% of the equipment cost")
+            reasons.append(f"{cost_share_pct}% du coût de l'équipement")
         if recurrences >= 1:
-            reasons.append(f"{recurrences} recurrence(s) within {RECURRENCE_DAYS} days")
+            reasons.append(f"{recurrences} récurrence(s) à moins de {RECURRENCE_DAYS} jours")
         return "P1", " + ".join(reasons)
     if n_severe >= 1:
         return "P2", (
-            f"{n_severe} severe incident(s), {cost_share_pct}% of the cost, "
-            f"no recurrence within {RECURRENCE_DAYS} days"
+            f"{n_severe} incident(s) sévère(s), {cost_share_pct}% du coût, "
+            f"pas de récurrence à moins de {RECURRENCE_DAYS} jours"
         )
     if cost_share_pct >= 10:
-        return "P2", f"no severe incident but {cost_share_pct}% of the equipment cost"
-    return "P3", f"no severe incident and {cost_share_pct}% of the cost"
+        return "P2", f"pas d'incident sévère mais {cost_share_pct}% du coût de l'équipement"
+    return "P3", f"pas d'incident sévère et {cost_share_pct}% du coût"
 
 
 def _compare(value, median) -> dict:
@@ -408,10 +408,10 @@ def _yearly_trend(d: pd.DataFrame, years: range) -> dict:
         100 * (last["cost_eur"] / first["cost_eur"] - 1) if first["cost_eur"] else None
     )
     if change is None:
-        label = "no incident in the first year"
+        label = "aucun incident la première année"
     else:
         label = (
-            "increasing" if change > 20 else "decreasing" if change < -20 else "stable"
+            "croissante" if change > 20 else "décroissante" if change < -20 else "stable"
         )
     overall = {
         "first_year": first["year"],
@@ -530,19 +530,19 @@ def build_equipment_stats(
     total_cost = d["estimated_cost_eur"].sum()
 
     def versus(score: float) -> str:
-        side = "at or above" if score >= CRITICAL_SCORE else "below"
-        return f"{_round(score)} ({side} the threshold of {CRITICAL_SCORE})"
+        side = "au seuil ou au-dessus" if score >= CRITICAL_SCORE else "en dessous"
+        return f"{_round(score)} ({side} du seuil de {CRITICAL_SCORE})"
 
     priority = str(row["equipment_priority"])
     why = (
-        f"criticality score {versus(row['score_site'])} against the other equipment of "
-        f"the site and {versus(row['score_fleet'])} against the whole solar fleet"
+        f"score de criticité {versus(row['score_site'])} par rapport aux autres équipements "
+        f"du site et {versus(row['score_fleet'])} par rapport à l'ensemble du parc solaire"
     )
     equipment = {
         "equipment_id": equipment_id,
         "site": site,
-        "asset_type": "PV inverter and the DC field upstream of it",
-        "equipment_priority": priority if priority != "-" else "not critical",
+        "asset_type": "Onduleur PV et champ CC amont",
+        "equipment_priority": priority if priority != "-" else "non critique",
         "risk_level": str(row["risk_level"]),
         "criticality_score_within_site": _round(row["score_site"]),
         "criticality_score_vs_fleet": _round(row["score_fleet"]),
@@ -681,30 +681,32 @@ def _facts(
     def versus(label: str, block: dict, unit: str = "", fmt=str) -> str:
         ratio = block["ratio_to_site_median"]
         if ratio is None:
-            reading = "no comparison possible"
+            reading = "aucune comparaison possible"
         elif ratio >= 1.1:
-            reading = "ABOVE the site median"
+            reading = "AU-DESSUS de la médiane du site"
         elif ratio <= 0.9:
-            reading = "BELOW the site median"
+            reading = "EN-DESSOUS de la médiane du site"
         else:
-            reading = "IN LINE with the site median"
+            reading = "CONFORME à la médiane du site"
         return (
-            f"{label}: {fmt(block['this_equipment'])}{unit} on this equipment vs "
-            f"{fmt(block['site_median_equipment'])}{unit} for the median equipment of the site "
+            f"{label} : {fmt(block['this_equipment'])}{unit} sur cet équipement vs "
+            f"{fmt(block['site_median_equipment'])}{unit} pour l'équipement médian du site "
             f"(ratio ×{ratio}, {reading})."
         )
 
     benchmark = [
-        versus("Incidents of all severities", comparison["incidents_all_severities"]),
-        versus("Severe incidents", comparison["severe_incidents"]),
+        versus("Incidents (toutes sévérités)", comparison["incidents_all_severities"]),
+        versus("Incidents sévères", comparison["severe_incidents"]),
         versus(
-            "Estimated cost of all incidents",
+            "Coût estimé de tous les incidents",
             comparison["cost_all_severities_eur"],
             " EUR",
             format_eur,
         ),
         versus(
-            "Downtime of all incidents", comparison["downtime_all_severities_h"], " h"
+            "Temps d'arrêt de tous les incidents",
+            comparison["downtime_all_severities_h"],
+            " h",
         ),
     ]
 
@@ -712,69 +714,69 @@ def _facts(
     top_mode = modes[0]
     cost = [
         (
-            f"Moderate and severe incidents: {key_figures['n_incidents']} "
-            f"({key_figures['n_severe']} severe), {format_eur(key_figures['cost_total_eur'])} EUR in total; "
-            f"severe incidents account for {key_figures['severe_share_of_cost_pct']}% of this cost."
+            f"Incidents modérés et sévères : {key_figures['n_incidents']} "
+            f"({key_figures['n_severe']} sévères), {format_eur(key_figures['cost_total_eur'])} EUR au total ; "
+            f"les incidents sévères représentent {key_figures['severe_share_of_cost_pct']}% de ce coût."
         ),
         (
-            f"The most costly single incident is {top_incident['ref']} "
-            f"({top_incident['failure_mode']}, {top_incident['severity']}, {top_incident['date']}): "
+            f"L'incident le plus coûteux est {top_incident['ref']} "
+            f"({top_incident['failure_mode']}, {top_incident['severity']}, {top_incident['date']}) : "
             f"{format_eur(top_incident['cost_eur'])} EUR, {top_incident['share_of_total_cost_pct']}% "
-            "of the cost of moderate and severe incidents."
+            "du coût des incidents modérés et sévères."
         ),
         (
-            f"The most costly failure mode is {top_mode['failure_mode']}: "
-            f"{format_eur(top_mode['cost_total_eur'])} EUR over {top_mode['n_incidents']} incident(s), "
-            f"{top_mode['cost_share_pct']}% of the cost."
+            f"Le mode de défaillance le plus coûteux est {top_mode['failure_mode']} : "
+            f"{format_eur(top_mode['cost_total_eur'])} EUR sur {top_mode['n_incidents']} incident(s), "
+            f"{top_mode['cost_share_pct']}% du coût."
         ),
     ]
     if top_incident["failure_mode"] != top_mode["failure_mode"]:
         cost.append(
-            "The most costly incident and the most costly failure mode are different: "
-            "do not attribute one to the other."
+            "L'incident le plus coûteux et le mode de défaillance le plus coûteux sont "
+            "différents : ne pas attribuer l'un à l'autre."
         )
     if unclassified["n_incidents"]:
         cost.append(
             f"{unclassified['n_incidents']} incident(s) ({', '.join(unclassified['incidents'])}) "
-            f"could not be assigned to a failure mode ({format_eur(unclassified['cost_eur'])} EUR, "
-            f"{unclassified['cost_share_pct']}% of the cost): they count in every total but "
-            "belong to no failure mode."
+            f"n'ont pas pu être assignés à un mode de défaillance ({format_eur(unclassified['cost_eur'])} EUR, "
+            f"{unclassified['cost_share_pct']}% du coût) : ils comptent dans tous les totaux mais "
+            "n'appartiennent à aucun mode de défaillance."
         )
 
     trend = []
     for year in yearly["by_year"]:
         change = year["cost_change_vs_previous_year_pct"]
         trend.append(
-            f"{year['year']}: {year['n_incidents']} incident(s) ({year['n_severe']} severe), "
+            f"{year['year']} : {year['n_incidents']} incident(s) ({year['n_severe']} sévères), "
             f"{format_eur(year['cost_eur'])} EUR"
-            + (f" ({change:+}% vs previous year)." if change is not None else ".")
+            + (f" ({change:+}% vs année précédente)." if change is not None else ".")
         )
     overall = yearly["overall"]
     if overall["cost_change_first_to_last_year_pct"] is not None:
         trend.append(
-            f"From {overall['first_year']} to {overall['last_year']} the cost changed by "
-            f"{overall['cost_change_first_to_last_year_pct']:+}% (trend: {overall['label']})."
+            f"De {overall['first_year']} à {overall['last_year']}, le coût a évolué de "
+            f"{overall['cost_change_first_to_last_year_pct']:+}% (tendance : {overall['label']})."
         )
 
     top_weather = weather[0]
     weather_facts = [
         (
-            f"Most downtime occurs under '{top_weather['weather_condition']}': "
-            f"{top_weather['downtime_total_h']} h over {top_weather['n_incidents']} incident(s), "
-            f"{top_weather['share_of_equipment_downtime_pct']}% of the downtime "
+            f"Le plus de temps d'arrêt est observé sous '{top_weather['weather_condition']}' : "
+            f"{top_weather['downtime_total_h']} h sur {top_weather['n_incidents']} incident(s), "
+            f"{top_weather['share_of_equipment_downtime_pct']}% du temps d'arrêt "
             f"({top_weather['representation']})."
         ),
         *(
-            f"'{w['weather_condition']}' is {w['representation']}: {w['share_of_equipment_incidents_pct']}% "
-            f"of the incidents of this equipment vs {w['share_of_site_incidents_pct']}% on the site"
-            + (" (indicative only)." if w["sample"] != "ok" else ".")
+            f"'{w['weather_condition']}' est {w['representation']} : {w['share_of_equipment_incidents_pct']}% "
+            f"des incidents de cet équipement vs {w['share_of_site_incidents_pct']}% sur le site"
+            + (" (indicatif uniquement)." if w["sample"] != "ok" else ".")
             for w in weather
-            if w["representation"] != "in line with site"
+            if w["representation"] != "conforme au site"
         ),
     ]
 
     priorities = [
-        f"{m['failure_mode']}: priority {m['recommendation_priority']} ({m['priority_reason']})."
+        f"{m['failure_mode']} : priorité {m['recommendation_priority']} ({m['priority_reason']})."
         for m in modes
     ]
     return {

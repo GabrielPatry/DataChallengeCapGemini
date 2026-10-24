@@ -53,6 +53,11 @@ PLOT_METHOD_PREFIX = "plot_"
 # Severity levels in increasing order of seriousness (used for axis ordering)
 SEVERITY_ORDER: list[str] = ["mineure", "modérée", "sévère"]
 
+# Colour scheme: blue for counts/frequency, red for cost
+COLOR_COUNT = "#2a78d6"
+COLOR_COST = "#e34948"
+COLOR_SITE = "#1baf7a"
+
 
 class PlotFactory:
     """Builds plotly figures from an incidents dataframe.
@@ -159,15 +164,16 @@ class PlotFactory:
             df_daily_cost,
             x="date",
             y="estimated_cost_eur",
-            title=f"Daily Estimated Cost Over Time - Equipment ID: {equipment_id}",
+            title=f"Coût estimé quotidien — Équipement {equipment_id}",
             labels={
                 "date": "Date",
-                "estimated_cost_eur": "Estimated Cost (EUR)",
+                "estimated_cost_eur": "Coût estimé (EUR)",
             },
         )
-        fig.update_traces(mode="lines+markers")
+        fig.update_traces(mode="lines+markers", line_color=COLOR_COST)
+        fig.update_layout(showlegend=False)
         description = {
-            "title": f"Coût estimé quotidien - Équipement : {equipment_id}",
+            "title": f"Coût estimé quotidien — Équipement {equipment_id}",
             "chart_type": "courbe avec marqueurs quotidiens",
             "main_features": (
                 "Coût estimé quotidien pour un équipement ; les jours sans "
@@ -199,16 +205,20 @@ class PlotFactory:
             cost_by_site_equipment,
             x="site",
             y="estimated_cost_eur",
-            title="Distribution of Total Cost per Equipment by Site",
+            title="Distribution du coût total par équipement et par site",
             labels={
                 "site": "Site",
-                "estimated_cost_eur": "Total Estimated Cost per Equipment (EUR)",
+                "estimated_cost_eur": "Coût total estimé par équipement (EUR)",
             },
             points="all",
             color="site",
         )
         fig.update_layout(showlegend=False)
-        fig.update_yaxes(showgrid=True, zeroline=False)
+        fig.update_yaxes(
+            showgrid=True,
+            zeroline=False,
+            title_text="Coût total estimé par équipement (EUR)",
+        )
         description = {
             "title": "Distribution du coût total par équipement et par site",
             "chart_type": "boîte à moustaches avec les points de chaque équipement",
@@ -270,18 +280,22 @@ class PlotFactory:
             x="date",
             y="estimated_cost_eur",
             color="equipment_id",
-            title=f"Estimated Cost Over Time - Top {top_n} Equipment at Site: {selected_site}",
+            title=f"Coût estimé quotidien — Top {top_n} équipements du site {selected_site}",
             labels={
                 "date": "Date",
-                "estimated_cost_eur": "Estimated Cost (EUR)",
-                "equipment_id": "Equipment ID",
+                "estimated_cost_eur": "Coût estimé (EUR)",
+                "equipment_id": "Équipement",
             },
         )
-        fig.update_traces(mode="markers", marker={"size": 8})
+        fig.update_traces(mode="markers", marker={"size": 10})
+        fig.update_layout(
+            legend={"title": {"text": "Équipement"}, "orientation": "h", "y": -0.15},
+            yaxis_title="Coût estimé (EUR)",
+        )
         description = {
             "title": (
-                f"Évolution du coût estimé - {top_n} équipements principaux "
-                f"du site : {selected_site}"
+                f"Coût estimé quotidien — {top_n} équipements principaux "
+                f"du site {selected_site}"
             ),
             "chart_type": "nuage de points quotidien avec une série par équipement",
             "main_features": (
@@ -304,39 +318,66 @@ class PlotFactory:
     def plot_incident_count_by_severity(
         self,
     ) -> tuple[go.Figure, dict[str, object]]:
-        """Number of incidents per severity level, split by asset type."""
+        """Number of incidents (blue bars) and total cost (red line) per severity level.
+
+        Combo chart: left axis = incident count (blue bars),
+        right axis = total estimated cost in EUR (red line with markers).
+        """
         counts = (
-            self.df.groupby(["severity", "asset_type"])
-            .size()
-            .to_frame("incident_count")
+            self.df.groupby("severity")
+            .agg(
+                incident_count=("severity", "size"),
+                total_cost_eur=("estimated_cost_eur", "sum"),
+            )
+            .reindex(SEVERITY_ORDER)
             .reset_index()
         )
-        fig = px.bar(
-            counts,
-            x="severity",
-            y="incident_count",
-            color="asset_type",
-            barmode="group",
-            title="Number of Incidents by Severity and Asset Type",
-            labels={
-                "severity": "Severity",
-                "incident_count": "Number of Incidents",
-                "asset_type": "Asset Type",
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=counts["severity"],
+                y=counts["incident_count"],
+                name="Nombre d'incidents",
+                marker_color=COLOR_COUNT,
+                yaxis="y",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=counts["severity"],
+                y=counts["total_cost_eur"],
+                name="Coût total estimé (EUR)",
+                mode="lines+markers",
+                line={"color": COLOR_COST, "width": 2.5},
+                marker={"size": 8},
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            title="Nombre d'incidents et coût total par niveau de sévérité",
+            xaxis_title="Niveau de sévérité",
+            yaxis={"title": "Nombre d'incidents", "side": "left"},
+            yaxis2={
+                "title": "Coût total estimé (EUR)",
+                "side": "right",
+                "overlaying": "y",
+                "showgrid": False,
             },
-            category_orders={"severity": SEVERITY_ORDER},
+            legend={"orientation": "h", "y": -0.2},
         )
         description = {
-            "title": "Nombre d'incidents par niveau de sévérité et type d'actif",
-            "chart_type": "diagramme à barres groupées",
+            "title": "Nombre d'incidents et coût total par niveau de sévérité",
+            "chart_type": "diagramme combiné barres + courbe",
             "main_features": (
-                "Compare le nombre d'incidents par niveau de sévérité, avec des "
-                "barres distinctes pour chaque type d'actif."
+                "Pour chaque niveau de sévérité, le nombre d'incidents est "
+                "représenté par des barres bleues (axe de gauche) et le coût "
+                "total estimé par une courbe rouge avec marqueurs (axe de droite)."
             ),
             "incident_counts": [
                 {
                     "severity": str(row["severity"]),
-                    "asset_type": str(row["asset_type"]),
                     "incident_count": int(row["incident_count"]),
+                    "total_cost_eur": float(row["total_cost_eur"]),
                 }
                 for _, row in counts.iterrows()
             ],
@@ -346,39 +387,68 @@ class PlotFactory:
     def plot_total_cost_by_weather_condition(
         self,
     ) -> tuple[go.Figure, dict[str, object]]:
-        """Total estimated cost per weather condition, split by asset type."""
+        """Total estimated cost (red bars) and incident count (blue line) per weather condition.
+
+        Combo chart: left axis = total estimated cost in EUR (red bars),
+        right axis = incident count (blue line with markers).
+        """
         totals = (
-            self.df.groupby(["weather_condition", "asset_type"])["estimated_cost_eur"]
-            .sum()
+            self.df.groupby("weather_condition")
+            .agg(
+                total_cost_eur=("estimated_cost_eur", "sum"),
+                incident_count=("weather_condition", "size"),
+            )
             .reset_index()
+            .sort_values("total_cost_eur", ascending=False)
         )
-        fig = px.bar(
-            totals,
-            x="weather_condition",
-            y="estimated_cost_eur",
-            color="asset_type",
-            barmode="group",
-            title="Total Estimated Cost by Weather Condition and Asset Type",
-            labels={
-                "weather_condition": "Weather Condition",
-                "estimated_cost_eur": "Total Estimated Cost (EUR)",
-                "asset_type": "Asset Type",
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=totals["weather_condition"],
+                y=totals["incident_count"],
+                name="Nombre d'incidents",
+                marker_color=COLOR_COUNT,
+                yaxis="y",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=totals["weather_condition"],
+                y=totals["total_cost_eur"],
+                name="Coût total estimé (EUR)",
+                mode="lines+markers",
+                line={"color": COLOR_COST, "width": 2.5},
+                marker={"size": 8},
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            title="Coût total estimé et nombre d'incidents par condition météorologique",
+            xaxis_title="Condition météorologique",
+            yaxis={"title": "Coût total estimé (EUR)", "side": "left"},
+            yaxis2={
+                "title": "Nombre d'incidents",
+                "side": "right",
+                "overlaying": "y",
+                "showgrid": False,
             },
+            legend={"orientation": "h", "y": -0.2},
         )
         fig.update_xaxes(tickangle=-45)
         description = {
-            "title": "Coût estimé total par condition météorologique et type d'actif",
-            "chart_type": "diagramme à barres groupées",
+            "title": "Coût total estimé et nombre d'incidents par condition météorologique",
+            "chart_type": "diagramme combiné barres + courbe",
             "main_features": (
-                "Compare le coût estimé total selon les conditions "
-                "météorologiques, avec des barres distinctes pour chaque type "
-                "d'actif."
+                "Pour chaque condition météorologique, le coût total estimé "
+                "est représenté par des barres rouges (axe de gauche) et le "
+                "nombre d'incidents par une courbe bleue avec marqueurs "
+                "(axe de droite)."
             ),
             "cost_totals_eur": [
                 {
                     "weather_condition": str(row["weather_condition"]),
-                    "asset_type": str(row["asset_type"]),
-                    "total_estimated_cost_eur": float(row["estimated_cost_eur"]),
+                    "total_estimated_cost_eur": float(row["total_cost_eur"]),
+                    "incident_count": int(row["incident_count"]),
                 }
                 for _, row in totals.iterrows()
             ],
@@ -386,36 +456,30 @@ class PlotFactory:
         return fig, description
 
     def plot_downtime_vs_cost(self) -> tuple[go.Figure, dict[str, object]]:
-        """Scatter plot of downtime duration vs estimated cost, per asset type."""
+        """Scatter plot of downtime duration vs estimated cost, coloured by severity."""
         fig = px.scatter(
             self.df,
             x="downtime_hours",
             y="estimated_cost_eur",
             color="severity",
-            facet_col="asset_type",
             opacity=0.6,
-            title="Estimated Cost vs Downtime Duration",
+            title="Coût estimé en fonction du temps d'arrêt",
             labels={
-                "downtime_hours": "Downtime (hours)",
-                "estimated_cost_eur": "Estimated Cost (EUR)",
-                "severity": "Severity",
-                "asset_type": "Asset Type",
+                "downtime_hours": "Temps d'arrêt (heures)",
+                "estimated_cost_eur": "Coût estimé (EUR)",
+                "severity": "Sévérité",
             },
             category_orders={"severity": SEVERITY_ORDER},
         )
         description = {
             "title": "Coût estimé en fonction du temps d'arrêt",
-            "chart_type": "nuage de points avec facettes",
+            "chart_type": "nuage de points",
             "main_features": (
                 "Chaque point représente un incident ; le temps d'arrêt est en "
                 "abscisse, le coût estimé en ordonnée, la couleur indique la "
-                "sévérité et les panneaux distinguent les types d'actifs."
+                "sévérité."
             ),
             "incident_count": len(self.df),
-            "incident_counts_by_asset_type": {
-                str(key): int(value)
-                for key, value in self.df["asset_type"].value_counts().items()
-            },
             "incident_counts_by_severity": {
                 str(key): int(value)
                 for key, value in self.df["severity"].value_counts().items()
@@ -426,81 +490,220 @@ class PlotFactory:
     def plot_monthly_incident_count(
         self,
     ) -> tuple[go.Figure, dict[str, object]]:
-        """Number of incidents per month over time, split by asset type."""
+        """Monthly incident count (blue bars) and total cost (red line) over time.
+
+        Combo chart: left axis = incident count (blue bars),
+        right axis = total estimated cost in EUR (red line with markers).
+        """
         df_plot = self.df.copy()
         df_plot["date"] = pd.to_datetime(df_plot["date"])
         df_plot["month"] = df_plot["date"].dt.to_period("M").dt.to_timestamp()
-        counts = (
-            df_plot.groupby(["month", "asset_type"])
-            .size()
-            .to_frame("incident_count")
+        monthly = (
+            df_plot.groupby("month")
+            .agg(
+                incident_count=("month", "size"),
+                total_cost_eur=("estimated_cost_eur", "sum"),
+            )
             .reset_index()
         )
-        fig = px.line(
-            counts,
-            x="month",
-            y="incident_count",
-            color="asset_type",
-            title="Number of Incidents per Month by Asset Type",
-            labels={
-                "month": "Month",
-                "incident_count": "Number of Incidents",
-                "asset_type": "Asset Type",
-            },
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=monthly["month"],
+                y=monthly["incident_count"],
+                name="Nombre d'incidents",
+                marker_color=COLOR_COUNT,
+                yaxis="y",
+            )
         )
-        fig.update_traces(mode="lines+markers")
+        fig.add_trace(
+            go.Scatter(
+                x=monthly["month"],
+                y=monthly["total_cost_eur"],
+                name="Coût total estimé (EUR)",
+                mode="lines+markers",
+                line={"color": COLOR_COST, "width": 2},
+                marker={"size": 5},
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            title="Nombre d'incidents et coût total par mois",
+            xaxis_title="Mois",
+            yaxis={"title": "Nombre d'incidents", "side": "left"},
+            yaxis2={
+                "title": "Coût total estimé (EUR)",
+                "side": "right",
+                "overlaying": "y",
+                "showgrid": False,
+            },
+            legend={"orientation": "h", "y": -0.2},
+        )
+        fig.update_xaxes(tickformat="%Y-%m")
         description = {
-            "title": "Nombre d'incidents par mois et par type d'actif",
-            "chart_type": "courbe mensuelle avec marqueurs",
+            "title": "Nombre d'incidents et coût total par mois",
+            "chart_type": "diagramme combiné barres + courbe mensuel",
             "main_features": (
-                "Présente l'évolution mensuelle du nombre d'incidents, avec une "
-                "série distincte pour chaque type d'actif."
+                "Pour chaque mois, le nombre d'incidents est représenté par "
+                "des barres bleues (axe de gauche) et le coût total estimé "
+                "par une courbe rouge avec marqueurs (axe de droite)."
             ),
-            "monthly_incident_counts": [
+            "monthly_data": [
                 {
                     "month": row["month"].date().isoformat(),
-                    "asset_type": str(row["asset_type"]),
                     "incident_count": int(row["incident_count"]),
+                    "total_cost_eur": float(row["total_cost_eur"]),
                 }
-                for _, row in counts.iterrows()
+                for _, row in monthly.iterrows()
             ],
         }
         return fig, description
 
     def plot_total_cost_by_site(self) -> tuple[go.Figure, dict[str, object]]:
-        """Total estimated cost per site, split by asset type."""
+        """Total estimated cost per site (red bars) and incident count (blue line).
+
+        Combo chart: left axis = total estimated cost in EUR (red bars),
+        right axis = incident count (blue line with markers).
+        """
         totals = (
-            self.df.groupby(["site", "asset_type"])["estimated_cost_eur"]
-            .sum()
+            self.df.groupby("site")
+            .agg(
+                total_cost_eur=("estimated_cost_eur", "sum"),
+                incident_count=("site", "size"),
+            )
             .reset_index()
+            .sort_values("total_cost_eur", ascending=False)
         )
-        fig = px.bar(
-            totals,
-            x="site",
-            y="estimated_cost_eur",
-            color="asset_type",
-            barmode="group",
-            title="Total Estimated Cost by Site and Asset Type",
-            labels={
-                "site": "Site",
-                "estimated_cost_eur": "Total Estimated Cost (EUR)",
-                "asset_type": "Asset Type",
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=totals["site"],
+                y=totals["incident_count"],
+                name="Nombre d'incidents",
+                marker_color=COLOR_COUNT,
+                yaxis="y",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=totals["site"],
+                y=totals["total_cost_eur"],
+                name="Coût total estimé (EUR)",
+                mode="lines+markers",
+                line={"color": COLOR_COST, "width": 2.5},
+                marker={"size": 8},
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            title="Coût total estimé et nombre d'incidents par site",
+            xaxis_title="Site",
+            yaxis={"title": "Coût total estimé (EUR)", "side": "left"},
+            yaxis2={
+                "title": "Nombre d'incidents",
+                "side": "right",
+                "overlaying": "y",
+                "showgrid": False,
             },
+            legend={"orientation": "h", "y": -0.2},
         )
         description = {
-            "title": "Coût estimé total par site et type d'actif",
-            "chart_type": "diagramme à barres groupées",
+            "title": "Coût total estimé et nombre d'incidents par site",
+            "chart_type": "diagramme combiné barres + courbe",
             "main_features": (
-                "Compare le coût estimé total des incidents entre les sites, "
-                "avec des barres distinctes pour chaque type d'actif."
+                "Pour chaque site, le coût total estimé est représenté par "
+                "des barres rouges (axe de gauche) et le nombre d'incidents "
+                "par une courbe bleue avec marqueurs (axe de droite)."
             ),
             "cost_totals_eur": [
                 {
                     "site": str(row["site"]),
-                    "asset_type": str(row["asset_type"]),
-                    "total_estimated_cost_eur": float(row["estimated_cost_eur"]),
+                    "total_estimated_cost_eur": float(row["total_cost_eur"]),
+                    "incident_count": int(row["incident_count"]),
                 }
                 for _, row in totals.iterrows()
+            ],
+        }
+        return fig, description
+
+    def plot_cluster_frequency_cost(
+        self,
+    ) -> tuple[go.Figure, dict[str, object]]:
+        """Incident count (blue bars) and total cost (red line) per thematic cluster.
+
+        Combo chart: left axis = incident count (blue bars),
+        right axis = total estimated cost in EUR (red line with markers).
+        The noise cluster (C_NOISE) is included and labelled.
+        """
+        cluster_agg = (
+            self.df.groupby(["cluster_code", "cluster_name"])
+            .agg(
+                incident_count=("cluster_code", "size"),
+                total_cost_eur=("estimated_cost_eur", "sum"),
+            )
+            .reset_index()
+            .sort_values("incident_count", ascending=False)
+        )
+        # Build display labels: "C_0 — Name" or "Non classés" for noise
+        labels = []
+        for _, row in cluster_agg.iterrows():
+            if row["cluster_code"] == "C_NOISE":
+                labels.append("Non classés (bruit)")
+            else:
+                labels.append(f"{row['cluster_code']} — {row['cluster_name']}")
+        cluster_agg["label"] = labels
+
+        fig = go.Figure()
+        fig.add_trace(
+            go.Bar(
+                x=cluster_agg["label"],
+                y=cluster_agg["incident_count"],
+                name="Nombre d'incidents",
+                marker_color=COLOR_COUNT,
+                yaxis="y",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=cluster_agg["label"],
+                y=cluster_agg["total_cost_eur"],
+                name="Coût total estimé (EUR)",
+                mode="lines+markers",
+                line={"color": COLOR_COST, "width": 2.5},
+                marker={"size": 8},
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            title="Fréquence et coût total estimé par cluster thématique",
+            xaxis_title="Cluster",
+            yaxis={"title": "Nombre d'incidents", "side": "left"},
+            yaxis2={
+                "title": "Coût total estimé (EUR)",
+                "side": "right",
+                "overlaying": "y",
+                "showgrid": False,
+            },
+            legend={"orientation": "h", "y": -0.25},
+        )
+        fig.update_xaxes(tickangle=-30)
+        description = {
+            "title": "Fréquence et coût total estimé par cluster thématique",
+            "chart_type": "diagramme combiné barres + courbe",
+            "main_features": (
+                "Pour chaque cluster thématique, le nombre d'incidents est "
+                "représenté par des barres bleues (axe de gauche) et le coût "
+                "total estimé par une courbe rouge avec marqueurs (axe de "
+                "droite). Le cluster de bruit (incidents non classés) est inclus."
+            ),
+            "clusters": [
+                {
+                    "cluster_code": str(row["cluster_code"]),
+                    "cluster_name": str(row["cluster_name"]),
+                    "incident_count": int(row["incident_count"]),
+                    "total_cost_eur": float(row["total_cost_eur"]),
+                }
+                for _, row in cluster_agg.iterrows()
             ],
         }
         return fig, description
@@ -736,10 +939,11 @@ class EquipmentPlotFactory:
         )
 
     def plot_cost_timeline(self) -> tuple[go.Figure, dict]:
-        """Cost of each moderate/severe incident over time, by failure mode.
+        """Coût de chaque incident modéré/sévère dans le temps, par mode de défaillance.
 
-        Colour = failure-mode family, marker shape = failure mode, filled =
-        severe, hollow = moderate. The three most costly incidents are labelled.
+        Couleur = famille de modes de défaillance, forme du marqueur = mode de
+        défaillance, plein = sévère, creux = modéré. Les trois incidents les
+        plus coûteux sont étiquetés.
         """
         d = self.incidents
         fig = go.Figure()
@@ -794,8 +998,8 @@ class EquipmentPlotFactory:
                     )
                 )
         for name, symbol in (
-            ("filled = severe", "circle"),
-            ("hollow = moderate", "circle-open"),
+            ("plein = sévère", "circle"),
+            ("creux = modéré", "circle-open"),
         ):
             fig.add_trace(
                 go.Scatter(
@@ -828,13 +1032,13 @@ class EquipmentPlotFactory:
         pad = pd.Timedelta(days=20)
         _equipment_layout(
             fig,
-            f"{self.equipment_id} — cost of moderate and severe incidents by failure mode",
+            f"{self.equipment_id} — Coût des incidents modérés et sévères par mode de défaillance",
             width=1150,
             height=500,
         )
         fig.update_layout(
             legend={"x": 1.02, "y": 1, "font": {"size": 11}},
-            yaxis_title="Estimated cost (€)",
+            yaxis_title="Coût estimé (€)",
         )
         fig.update_xaxes(
             range=[self.df["date"].min() - pad, self.df["date"].max() + pad],
@@ -861,16 +1065,16 @@ class EquipmentPlotFactory:
             for _, r in d.iterrows()
         ]
         data = {
-            "figure": "Cost timeline of moderate and severe incidents",
-            "how_to_read": "One point per incident, in chronological order; the three most "
-            "costly incidents are labelled on the figure.",
+            "figure": "Chronologie des coûts des incidents modérés et sévères",
+            "how_to_read": "Un point par incident, dans l'ordre chronologique ; les trois "
+            "incidents les plus coûteux sont étiquetés sur la figure.",
             "labelled_incidents": top["ref"].tolist(),
             "points": points,
         }
         return fig, data
 
     def plot_downtime_weather(self) -> tuple[go.Figure, dict]:
-        """Downtime of each incident per weather condition (dot strip + median tick)."""
+        """Temps d'arrêt de chaque incident par condition météorologique (nuage de points + médiane)."""
         d = self.incidents
         conditions = ordered_weather(d["weather_condition"])
         rng = np.random.default_rng(0)
@@ -905,7 +1109,7 @@ class EquipmentPlotFactory:
                         "size": 24,
                         "line": {"color": TEXT_PRIMARY, "width": 3},
                     },
-                    hovertemplate="median: %{x} h<br>" + weather + "<extra></extra>",
+                    hovertemplate="médiane : %{x} h<br>" + weather + "<extra></extra>",
                     showlegend=False,
                 )
             )
@@ -920,13 +1124,13 @@ class EquipmentPlotFactory:
             )
         _equipment_layout(
             fig,
-            f"{self.equipment_id} — downtime vs weather (moderate + severe)",
+            f"{self.equipment_id} — Temps d'arrêt vs météo (modérés + sévères)",
             width=950,
             height=55 * len(conditions) + 170,
         )
         fig.update_layout(
             margin={"r": 120},
-            xaxis_title="Downtime per incident in hours (black tick = median)",
+            xaxis_title="Temps d'arrêt par incident en heures (trait noir = médiane)",
         )
         fig.update_xaxes(rangemode="tozero")
         fig.update_yaxes(
@@ -938,17 +1142,17 @@ class EquipmentPlotFactory:
         )
 
         data = {
-            "figure": "Downtime vs weather condition",
-            "how_to_read": "Rows sorted by total downtime. 'representation' compares the share of the "
-            "equipment's incidents under this weather with the share on the whole site.",
+            "figure": "Temps d'arrêt vs condition météorologique",
+            "how_to_read": "Lignes triées par temps d'arrêt total. 'representation' compare la part "
+            "des incidents de l'équipement sous cette météo avec la part sur l'ensemble du site.",
             "rows": weather_table(d, site_focus(self.df, self.site)),
         }
         return fig, data
 
     def plot_cluster_weather(self) -> tuple[go.Figure, dict]:
-        """Number of incidents per failure mode and weather condition (sequential heatmap).
+        """Nombre d'incidents par mode de défaillance et condition météorologique (heatmap séquentielle).
 
-        Unclassified incidents are left out: they belong to no failure mode.
+        Les incidents non classés sont exclus : ils n'appartiennent à aucun mode de défaillance.
         """
         d = classified(self.incidents)
         ct = pd.crosstab(d["cluster_name"], d["weather_condition"])
@@ -973,7 +1177,7 @@ class EquipmentPlotFactory:
         )
         _equipment_layout(
             fig,
-            f"{self.equipment_id} — number of incidents: failure mode × weather",
+            f"{self.equipment_id} — Nombre d'incidents : mode de défaillance × météo",
             width=130 * ct.shape[1] + 420,
             height=48 * ct.shape[0] + 200,
         )
@@ -981,9 +1185,10 @@ class EquipmentPlotFactory:
         fig.update_yaxes(showgrid=False, autorange="reversed")
 
         data = {
-            "figure": "Failure modes vs weather condition",
-            "how_to_read": "Number of incidents per failure mode (rows) and weather condition. A weather "
-            "condition absent from a failure mode's row never occurred with that failure mode.",
+            "figure": "Modes de défaillance vs condition météorologique",
+            "how_to_read": "Nombre d'incidents par mode de défaillance (lignes) et condition "
+            "météorologique. Une condition météorologique absente de la ligne d'un mode de "
+            "défaillance ne s'est jamais produite avec ce mode.",
             "matrix": failure_mode_weather_matrix(d),
         }
         return fig, data

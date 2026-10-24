@@ -38,7 +38,7 @@ import json
 import os
 import re
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -99,10 +99,23 @@ class ReportState(TypedDict, total=False):
     statistics: str
     clusters: str
     plot_descriptions: str
+    equipment_insights: str
     # Outputs of the graph nodes
     cost_drivers: str
     draft_recommendations: str
     recommendations: str
+
+
+class _EquipmentCost(TypedDict):
+    equipment_id: str
+    total_cost_eur: float
+    n_incidents: int
+    n_severe: int
+
+
+class _SiteEquipment(TypedDict):
+    site_code: str
+    equipment: list[_EquipmentCost]
 
 
 def _new_state_graph() -> StateGraph[ReportState]:  # ty: ignore[invalid-type-arguments]
@@ -181,8 +194,8 @@ CLUSTER_DESCRIPTION_SYSTEM_PROMPT = (
 
 COST_DRIVERS_SYSTEM_PROMPT = (
     "Tu es stratège de maintenance pour un parc d'actifs {label}. À partir "
-    "des statistiques, du résumé des clusters et des descriptions des figures "
-    "fournis, liste les 3 à 5 "
+    "des statistiques, du résumé des clusters, des descriptions des figures "
+    "et des analyses d'équipements individuels fournis, liste les 3 à 5 "
     "principaux facteurs de coût estimé et de temps d'arrêt, un par ligne, "
     "chacun justifié en une phrase par les données. N'invente aucun "
     "chiffre. Rédige en français."
@@ -191,9 +204,11 @@ COST_DRIVERS_SYSTEM_PROMPT = (
 DRAFT_RECOMMENDATIONS_SYSTEM_PROMPT = (
     "Tu es stratège de maintenance pour un parc d'actifs {label}. Pour "
     "chaque facteur de coût et de temps d'arrêt listé ci-dessous, rédige "
-    "une recommandation concrète et actionnable. Réponds avec une puce "
-    "markdown par facteur, à l'impératif, sans introduction. Rédige en "
-    "français."
+    "une recommandation concrète et actionnable. Si des analyses d'équipements "
+    "individuels sont fournies, inspire-toi de leurs diagnostics et actions "
+    "spécifiques pour rendre tes recommandations plus ciblées. Réponds avec "
+    "une puce markdown par facteur, à l'impératif, sans introduction. "
+    "Rédige en français."
 )
 
 PRIORITISE_RECOMMENDATIONS_SYSTEM_PROMPT = (
@@ -203,8 +218,9 @@ PRIORITISE_RECOMMENDATIONS_SYSTEM_PROMPT = (
     "provisoires ci-dessous comme la liste à puces markdown finale et "
     "priorisée du rapport : les plus impactantes en premier, au plus 6 "
     "puces, chacune commençant par '- '. Ne garde que des actions appuyées "
-    "par les recommandations provisoires et les statistiques, n'invente pas "
-    "de nouvelles actions. Rédige en français."
+    "par les recommandations provisoires, les statistiques et les analyses "
+    "d'équipements individuels, n'invente pas de nouvelles actions. "
+    "Rédige en français."
 )
 
 CONCLUSION_SYSTEM_PROMPT = (
@@ -239,6 +255,17 @@ Contraintes :
 - Signale les éventuelles contradictions ou limites du rapport.
 - Évite les répétitions et les détails secondaires.
 - Rédige une synthèse autonome, claire et professionnelle, de 120 à 200 mots, avec des paragraphes et des puces Markdown si nécessaire."""
+
+FIGURE_INTERPRETATION_SYSTEM_PROMPT = (
+    "Tu es un analyste de données spécialisé en fiabilité industrielle. "
+    "On te fournit la description JSON d'une figure (titre, type de graphique, "
+    "données clés) extraite d'un rapport d'analyse d'incidents sur un parc "
+    "{label}. Rédige un commentaire d'analyse concis (2 à 4 phrases) de cette "
+    "figure : identifie les tendances principales, les points remarquables, les "
+    "anomalies ou les insights actionnables. Utilise uniquement les données "
+    "fournies dans la description, n'invente aucun chiffre. Rédige en français, "
+    "avec un ton de rapport professionnel."
+)
 
 
 @dataclass
@@ -314,6 +341,9 @@ class ReportFactory:
         )
         self.token_usage = TokenUsageCallback()
         self.llm = llm if llm is not None else self._default_llm()
+        # Equipment-level insights, collected by collect_equipment_insights()
+        # and injected into the recommendations prompt
+        self.equipment_insights: str = ""
         # Context elements shared by every agent
         self.statistics = self._render_statistics()
         self.cluster_table = self._compute_cluster_table()
@@ -484,6 +514,7 @@ class ReportFactory:
                         "Statistiques clés :\n{statistics}\n\n"
                         "Résumé des clusters :\n{clusters}\n\n"
                         "Descriptions des figures :\n{plot_descriptions}\n\n"
+                        "Analyses d'équipements individuels :\n{equipment_insights}\n\n"
                         "Liste les principaux facteurs de coût et de temps "
                         "d'arrêt."
                     ),
@@ -504,6 +535,7 @@ class ReportFactory:
                         "{cost_drivers}\n\n"
                         "Résumé des clusters :\n{clusters}\n\n"
                         "Descriptions des figures :\n{plot_descriptions}\n\n"
+                        "Analyses d'équipements individuels :\n{equipment_insights}\n\n"
                         "Rédige une recommandation par facteur."
                     ),
                 ),
@@ -521,6 +553,7 @@ class ReportFactory:
                         "Type d'actif : {label}\n\n"
                         "Statistiques clés :\n{statistics}\n\n"
                         "Descriptions des figures :\n{plot_descriptions}\n\n"
+                        "Analyses d'équipements individuels :\n{equipment_insights}\n\n"
                         "Recommandations provisoires :\n"
                         "{draft_recommendations}\n\n"
                         "Rédige la liste à puces finale et priorisée."
@@ -571,6 +604,198 @@ class ReportFactory:
             {"report": report},
             config={"callbacks": [self.token_usage]},
         )
+
+    def write_figure_interpretation(self, plot_name: str) -> str:
+        """Generate a short analysis paragraph for one figure.
+
+        Uses the figure's JSON description (loaded from the plots directory)
+        as context for a small LLM agent that writes 2-4 sentences of analysis.
+        """
+        description = self.plot_descriptions.get(plot_name)
+        if description is None:
+            return ""
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", FIGURE_INTERPRETATION_SYSTEM_PROMPT),
+                (
+                    "human",
+                    (
+                        "Type d'actif : {label}\n\n"
+                        "Nom de la figure : {plot_name}\n\n"
+                        "Description de la figure (JSON) :\n{description}\n\n"
+                        "Statistiques clés du parc :\n{statistics}\n\n"
+                        "Rédige le commentaire d'analyse de cette figure."
+                    ),
+                ),
+            ]
+        )
+        chain = prompt | self.llm | StrOutputParser()
+        return chain.invoke(
+            {
+                "label": self.label,
+                "plot_name": plot_name,
+                "description": json.dumps(description, ensure_ascii=False, indent=2),
+                "statistics": self.statistics,
+            },
+            config={"callbacks": [self.token_usage]},
+        )
+
+    def write_figure_interpretations(
+        self, plot_names: list[str] | None = None
+    ) -> dict[str, str]:
+        """Generate analysis paragraphs for selected figures.
+
+        *plot_names* defaults to a curated list of the most insightful figures.
+        Returns a mapping ``{plot_name: interpretation_text}``.
+        """
+        if plot_names is None:
+            plot_names = [
+                "plot_total_cost_by_site",
+                "plot_incident_count_by_severity",
+                "plot_total_cost_by_weather_condition",
+                "plot_monthly_incident_count",
+                "plot_cluster_frequency_cost",
+            ]
+        interpretations: dict[str, str] = {}
+        for name in plot_names:
+            if name in self.plot_descriptions:
+                print(f"[{self.label}] Interpreting figure: {name}")
+                interpretations[name] = self.write_figure_interpretation(name)
+        return interpretations
+
+    def collect_equipment_insights(
+        self,
+        top_n_per_site: int = 3,
+        force: bool = False,
+    ) -> str:
+        """Run ``dc equipment`` for the top-N most costly equipment per site.
+
+        Launches ``uv run dc equipment --site <SITE> --equipment <EQ1> ...``
+        as a subprocess for each site, then reads the generated report sections
+        (root_causes, recommendations, failure_modes, conclusion) and builds
+        a structured context string stored in ``self.equipment_insights``.
+
+        This context is later injected into the recommendations prompt so the
+        LLM can enrich the fleet-level recommendations with equipment-specific
+        diagnostics and actions.
+        """
+        import subprocess
+
+        equipment_reports_dir = PROJECT_ROOT / "equipment_reports"
+        solar_csv = PROJECT_ROOT / "data" / "incidents_clusterised_solar.csv"
+
+        # Group by site, find top N equipment per site
+        site_equipment: dict[Hashable, _SiteEquipment] = {}
+        for site, site_df in self.df.groupby("site"):
+            equip_cost = (
+                site_df.groupby("equipment_id")
+                .agg(
+                    total_cost_eur=("estimated_cost_eur", "sum"),
+                    n_incidents=("equipment_id", "size"),
+                    n_severe=("severity", lambda s: int((s == "sévère").sum())),
+                )
+                .sort_values("total_cost_eur", ascending=False)
+                .head(top_n_per_site)
+                .reset_index()
+            )
+            site_code = str(equip_cost["equipment_id"].iloc[0]).split("-")[0]
+            equipment_list: list[_EquipmentCost] = []
+            for _, row in equip_cost.iterrows():
+                equipment_list.append(
+                    {
+                        "equipment_id": str(row["equipment_id"]),
+                        "total_cost_eur": float(row["total_cost_eur"]),
+                        "n_incidents": int(row["n_incidents"]),
+                        "n_severe": int(row["n_severe"]),
+                    }
+                )
+            site_equipment[site] = {
+                "site_code": site_code,
+                "equipment": equipment_list,
+            }
+
+        # Run dc equipment subprocess for each site
+        for site, info in site_equipment.items():
+            site_code = info["site_code"]
+            equip_ids = [e["equipment_id"] for e in info["equipment"]]
+            print(
+                f"[{self.label}] Running dc equipment for site {site_code}: "
+                f"{', '.join(equip_ids)}"
+            )
+
+            cmd = [
+                "uv",
+                "run",
+                "dc",
+                "equipment",
+                "--site",
+                site_code,
+                "--equipment",
+                *equip_ids,
+                "--solar-csv",
+                str(solar_csv),
+            ]
+            if force:
+                cmd.append("--force")
+
+            result = subprocess.run(
+                cmd,
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                print(
+                    f"[{self.label}] WARNING: dc equipment failed for "
+                    f"{site_code} (exit {result.returncode}):\n"
+                    f"{result.stderr[-500:]}"
+                )
+            else:
+                print(f"[{self.label}] dc equipment done for {site_code}")
+
+        # Read the generated sections and build the context
+        context_parts: list[str] = []
+        for site, info in site_equipment.items():
+            site_code = info["site_code"]
+            site_cost = sum(e["total_cost_eur"] for e in info["equipment"])
+            parts = [
+                (
+                    f"Site : {site} (coût total des {len(info['equipment'])} "
+                    f"équipements prioritaires : {site_cost:,.0f} EUR)"
+                )
+            ]
+            for equip in info["equipment"]:
+                equip_id = equip["equipment_id"]
+                sections_dir = (
+                    equipment_reports_dir / site_code / equip_id / "sections"
+                )
+                parts.append(
+                    f"\nÉquipement : {equip_id} "
+                    f"(coût : {equip['total_cost_eur']:,.0f} EUR, "
+                    f"{equip['n_incidents']} incidents dont "
+                    f"{equip['n_severe']} sévères)"
+                )
+                section_found = False
+                for section_name in (
+                    "root_causes",
+                    "recommendations",
+                    "failure_modes",
+                    "conclusion",
+                ):
+                    section_path = sections_dir / f"{section_name}.md"
+                    if section_path.exists():
+                        text = section_path.read_text(encoding="utf-8")
+                        parts.append(f"\n--- {section_name} ---\n{text}")
+                        section_found = True
+                if not section_found:
+                    parts.append(
+                        "\n*Rapport d'équipement non disponible.*"
+                    )
+            context_parts.append("\n".join(parts))
+
+        self.equipment_insights = "\n\n".join(context_parts)
+        return self.equipment_insights
 
     def write_synopsis(self, prose: ReportProse | None = None) -> str:
         """Generate the executive synopsis; stored in *prose* if given."""
@@ -697,6 +922,7 @@ class ReportFactory:
             "statistics": self.statistics,
             "clusters": self.clusters,
             "plot_descriptions": self.plot_descriptions_context,
+            "equipment_insights": self.equipment_insights,
         }
         text = graph.compile().invoke(state, config={"callbacks": [self.token_usage]})[
             "recommendations"
@@ -867,6 +1093,7 @@ def build_report_context(
     plots_dir: Path,
     report_dir: Path,
     prose: ReportProse,
+    figure_interpretations: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Build every template variable for one report.
 
@@ -911,13 +1138,13 @@ def build_report_context(
         cluster_counts["cluster_code"] != NOISE_CLUSTER_CODE
     ]
 
-    rows = ["| Cluster | Incidents | Share |", "| --- | ---: | ---: |"]
+    rows = ["| Cluster | Incidents | Part |", "| --- | ---: | ---: |"]
     for _, cluster in cluster_counts.iterrows():
         code = cluster["cluster_code"]
         name = cluster["cluster_name"]
         count = cluster["incident_count"]
         cell = (
-            f"{name} (unclassified)"
+            f"{name} (non classé)"
             if code == NOISE_CLUSTER_CODE
             else f"{code} — {name}"
         )
@@ -945,16 +1172,16 @@ def build_report_context(
         dominant_severity = cluster_df["severity"].value_counts().idxmax()
         sections.append(
             f"### {code} — {name}\n\n"
-            f"- **Incidents:** {count} ({100 * count / n_incidents:.1f}% of all incidents)\n"
-            f"- **Most affected site:** {cluster_top_site}\n"
-            f"- **Dominant severity:** {dominant_severity}\n\n"
+            f"- **Incidents :** {count} ({100 * count / n_incidents:.1f}% de tous les incidents)\n"
+            f"- **Site le plus touché :** {cluster_top_site}\n"
+            f"- **Sévérité dominante :** {dominant_severity}\n\n"
             f"{description}"
         )
     cluster_sections = "\n\n".join(sections)
 
     context: dict[str, str] = {
-        "report_title": f"{label.capitalize()} Asset Incident Analysis Report",
-        "asset_label": label.capitalize(),
+        "report_title": f"Rapport d'analyse des incidents — Parc {'solaire' if label == 'solar' else 'éolien'}",
+        "asset_label": "Solaire" if label == "solar" else "Éolien",
         "asset_label_lower": label,
         "generation_date": date.today().isoformat(),
         "n_incidents": str(n_incidents),
@@ -978,6 +1205,23 @@ def build_report_context(
         "recommendations": prose.recommendations,
         "synthesis": "",
     }
+
+    # Figure interpretation paragraphs (one per interpreted plot)
+    # Figure interpretation paragraphs — always add keys for the plots
+    # referenced in the solar template, so fill_template never fails on a
+    # missing interpretation placeholder
+    _INTERPRETED_PLOTS = (
+        "plot_total_cost_by_site",
+        "plot_incident_count_by_severity",
+        "plot_total_cost_by_weather_condition",
+        "plot_monthly_incident_count",
+        "plot_cluster_frequency_cost",
+    )
+    for plot_name in _INTERPRETED_PLOTS:
+        text = ""
+        if figure_interpretations:
+            text = figure_interpretations.get(plot_name, "")
+        context[f"interpretation_{plot_name}"] = text
 
     # One figure_<plot_name> variable per available plot (PNG preferred,
     # interactive HTML as fallback)
@@ -1059,10 +1303,28 @@ def run_reporting(
 
         plot_descriptions = _load_plot_descriptions(plots_dir)
         factory = factory_type(df, plot_descriptions=plot_descriptions)
+
+        # Solar-only: collect equipment insights (runs dc equipment subprocess)
+        # before generating prose, so recommendations can use them
+        if label == "solar":
+            factory.collect_equipment_insights()
+
         prose = factory.generate_prose()
 
+        # Solar-only: figure interpretations
+        figure_interpretations: dict[str, str] | None = None
+        if label == "solar":
+            figure_interpretations = factory.write_figure_interpretations()
+
         template = template_path.read_text(encoding="utf-8")
-        context = build_report_context(df, label, plots_dir, report_dir, prose=prose)
+        context = build_report_context(
+            df,
+            label,
+            plots_dir,
+            report_dir,
+            prose=prose,
+            figure_interpretations=figure_interpretations,
+        )
         synthesis_input = render_report(template, context, plots_dir)
         context["synthesis"] = factory.write_synthese(synthesis_input).strip()
         report = render_report(template, context, plots_dir)
@@ -1511,18 +1773,18 @@ def section_key_figures(ctx: SectionContext) -> str:
     key = ctx.stats["key_figures"]
     answer = ctx.ask(
         "key_figures",
-        "1. Key figures",
-        role="an asset-performance analyst who benchmarks PV inverters against the other inverters of their site.",
+        "1. Chiffres clés",
+        role="un analyste de performance des actifs qui compare les onduleurs PV aux autres onduleurs de leur site.",
         questions=[
             (
-                "On which indicators does this equipment stand out from the median equipment of its "
-                "site, and on which is it in line? Quote the ratios as written in `facts`."
+                "Sur quels indicateurs cet équipement se distingue-t-il de l'équipement médian de son "
+                "site, et sur lesquels est-il dans la moyenne ? Cite les ratios tels qu'écrits dans `facts`."
             ),
             (
-                "Why was this equipment selected (`why_selected`) and what does its priority mean for "
-                "the reader?"
+                "Pourquoi cet équipement a-t-il été sélectionné (`why_selected`) et que signifie sa "
+                "priorité pour le lecteur ?"
             ),
-            "How concentrated is the cost on severe incidents?",
+            "Dans quelle mesure le coût est-il concentré sur les incidents sévères ?",
         ],
         data={
             "equipment": equipment,
@@ -1530,7 +1792,7 @@ def section_key_figures(ctx: SectionContext) -> str:
             "key_figures_moderate_and_severe": key,
             "facts": ctx.facts["benchmark"] + ctx.facts["cost"][:1],
         },
-        schema=_object({"reading": _text("2-4 sentences answering the questions.")}),
+        schema=_object({"reading": _text("2-4 phrases répondant aux questions.")}),
     )
 
     def row(label: str, block: dict, unit: str = "", money: bool = False) -> dict:
@@ -1544,24 +1806,24 @@ def section_key_figures(ctx: SectionContext) -> str:
 
     benchmark = _md_table(
         [
-            row("Incidents (all severities)", comparison["incidents_all_severities"]),
-            row("Severe incidents", comparison["severe_incidents"]),
+            row("Incidents (toutes sévérités)", comparison["incidents_all_severities"]),
+            row("Incidents sévères", comparison["severe_incidents"]),
             row(
-                "Total estimated cost (all severities)",
+                "Coût total estimé (toutes sévérités)",
                 comparison["cost_all_severities_eur"],
                 " EUR",
                 True,
             ),
             row(
-                "Total downtime (all severities)",
+                "Temps d'arrêt total (toutes sévérités)",
                 comparison["downtime_all_severities_h"],
                 " h",
             ),
         ],
         {
-            "label": "Indicator",
-            "this": "This equipment",
-            "median": "Median equipment of the site",
+            "label": "Indicateur",
+            "this": "Cet équipement",
+            "median": "Équipement médian du site",
             "ratio": "Ratio",
         },
     )
@@ -1571,49 +1833,49 @@ def section_key_figures(ctx: SectionContext) -> str:
     scope = _md_table(
         [
             {
-                "label": "Incidents analysed",
-                "value": f"{key['n_incidents']} ({key['n_moderate']} moderate · {key['n_severe']} severe)",
+                "label": "Incidents analysés",
+                "value": f"{key['n_incidents']} ({key['n_moderate']} modérés · {key['n_severe']} sévères)",
             },
             {
-                "label": "Period covered",
+                "label": "Période couverte",
                 "value": f"{period['first_record']} → {period['last_record']}",
             },
             {
-                "label": "Total estimated cost",
+                "label": "Coût total estimé",
                 "value": f"{format_eur(key['cost_total_eur'])} EUR "
-                f"({key['severe_share_of_cost_pct']} % from severe incidents)",
+                f"({key['severe_share_of_cost_pct']} % provenant des incidents sévères)",
             },
             {
-                "label": "Average cost per incident",
+                "label": "Coût moyen par incident",
                 "value": f"{format_eur(key['cost_mean_eur'])} EUR",
             },
-            {"label": "Total downtime", "value": f"{key['downtime_total_h']} h"},
+            {"label": "Temps d'arrêt total", "value": f"{key['downtime_total_h']} h"},
             {
-                "label": "Average interval between incidents",
-                "value": f"{key['mean_days_between_incidents']} days",
+                "label": "Intervalle moyen entre incidents",
+                "value": f"{key['mean_days_between_incidents']} jours",
             },
             {
-                "label": "Most costly failure mode",
+                "label": "Mode de défaillance le plus coûteux",
                 "value": f"{top_mode['failure_mode']} ({format_eur(top_mode['cost_total_eur'])} EUR)",
             },
             {
-                "label": "Weather with most downtime",
+                "label": "Météo avec le plus de temps d'arrêt",
                 "value": f"{top_weather['weather_condition']} ({top_weather['downtime_total_h']} h)",
             },
         ],
         {
-            "label": "Moderate and severe incidents (scope of this report)",
-            "value": "Value",
+            "label": "Incidents modérés et sévères (périmètre de ce rapport)",
+            "value": "Valeur",
         },
     )
-    return "\n\n".join(["## 1. Key figures", benchmark, scope, answer["reading"]])
+    return "\n\n".join(["## 1. Chiffres clés", benchmark, scope, answer["reading"]])
 
 
 def section_methodology(ctx: SectionContext) -> str:
-    """2. How this report was built — fixed text, no agent.
+    """2. Comment ce rapport a été construit — texte fixe, sans agent.
 
-    The rules described here (selection, priorities, confidence) must match
-    the code exactly, so this section is not rewritten by a model.
+    Les règles décrites ici (sélection, priorités, confiance) doivent correspondre
+    exactement au code, cette section n'est donc pas réécrite par un modèle.
     """
     equipment = ctx.stats["equipment"]
     period = ctx.stats["period"]
@@ -1621,71 +1883,75 @@ def section_methodology(ctx: SectionContext) -> str:
     outcome = (
         f"**{priority}**"
         if priority in ("P1", "P2")
-        else "not flagged as critical (included on request)"
+        else "non signalé comme critique (inclus sur demande)"
     )
     paragraphs = [
-        "## 2. How this report was built",
+        "## 2. Comment ce rapport a été construit",
         (
-            f"**Scope.** This report covers the maintenance incidents recorded on "
-            f"{equipment['equipment_id']} between {period['first_record']} and {period['last_record']}. "
-            "Each incident report was read and assigned to a *failure mode* according to its "
-            "description. The detailed analysis focuses on moderate and severe incidents; minor "
-            "incidents only appear in the comparison with the site. Incidents are numbered #1, #2, … "
-            "in chronological order for this equipment (see the annex)."
+            f"**Périmètre.** Ce rapport couvre les incidents de maintenance enregistrés sur "
+            f"{equipment['equipment_id']} entre le {period['first_record']} et le {period['last_record']}. "
+            "Chaque rapport d'incident a été lu et assigné à un *mode de défaillance* en fonction de sa "
+            "description. L'analyse détaillée porte sur les incidents modérés et sévères ; les incidents "
+            "mineurs n'apparaissent que dans la comparaison avec le site. Les incidents sont numérotés "
+            "#1, #2, … dans l'ordre chronologique pour cet équipement (voir l'annexe)."
             + (
-                " Incidents whose report could not be assigned to a failure mode are marked "
-                "*unclassified*: they count in every total but in no failure mode."
+                " Les incidents dont le rapport n'a pas pu être assigné à un mode de défaillance sont "
+                "marqués *non classés* : ils comptent dans tous les totaux mais dans aucun mode de "
+                "défaillance."
                 if ctx.stats["unclassified_incidents"]["n_incidents"]
                 else ""
             )
         ),
         (
-            "**Why this equipment.** Each piece of equipment receives a criticality score from 0 to "
-            "100 that combines four indicators: number of incidents, number of severe incidents "
-            "(counted twice), total repair cost and total downtime. The score is computed twice: "
-            "against the other equipment of the same site and against all solar equipment of the "
-            "fleet. 50 corresponds to a typical piece of equipment, 75 or more to one clearly above "
-            "the others. Equipment scoring 75 or more on both comparisons is priority **P1**, on one "
-            f"of them priority **P2**. Here: {equipment['why_selected']} → {outcome}."
+            "**Pourquoi cet équipement.** Chaque équipement reçoit un score de criticité de 0 à "
+            "100 qui combine quatre indicateurs : nombre d'incidents, nombre d'incidents sévères "
+            "(comptés double), coût total de réparation et temps d'arrêt total. Le score est calculé "
+            "deux fois : par rapport aux autres équipements du même site et par rapport à tous les "
+            "équipements solaires du parc. 50 correspond à un équipement typique, 75 ou plus à un "
+            "équipement clairement au-dessus des autres. Un équipement atteignant 75 ou plus sur les "
+            "deux comparaisons est prioritaire **P1**, sur l'une d'elles prioritaire **P2**. Ici : "
+            f"{equipment['why_selected']} → {outcome}."
         ),
-        "**Recommendation priority.** Each recommendation addresses one failure mode and inherits "
-        "its priority:\n"
+        "**Priorité des recommandations.** Chaque recommandation adresse un mode de défaillance et "
+        "hérite de sa priorité :\n"
         + "\n".join(f"- **{p}** — {rule}" for p, rule in PRIORITY_RULES.items()),
         (
-            "**Root-cause confidence.** The confidence of a root-cause hypothesis reflects the number "
-            f"of incidents supporting it: high from {CONFIDENCE_HIGH_MIN_INCIDENTS} incidents, medium "
-            f"from {SAMPLE_THRESHOLD}, low below."
+            "**Confiance des causes racines.** La confiance d'une hypothèse de cause racine reflète le "
+            f"nombre d'incidents qui la soutiennent : élevée à partir de {CONFIDENCE_HIGH_MIN_INCIDENTS} "
+            f"incidents, moyenne à partir de {SAMPLE_THRESHOLD}, faible en dessous."
         ),
         (
-            "**Analysis.** All figures, tables and charts are computed directly from the incident "
-            f"records (a *close sequence* is a series of incidents less than {SEQUENCE_DAYS} days "
-            f"apart; a *recurrence* is the same failure mode coming back within {RECURRENCE_DAYS} "
-            "days). The commentary of each section was drafted with the help of an AI assistant "
-            "specialised in that topic, from the figures of the section only."
+            "**Analyse.** Toutes les figures, tableaux et graphiques sont calculés directement à partir "
+            f"des enregistrements d'incidents (une *séquence rapprochée* est une série d'incidents à moins "
+            f"de {SEQUENCE_DAYS} jours d'intervalle ; une *récurrence* est le même mode de défaillance "
+            f"qui revient à moins de {RECURRENCE_DAYS} jours). Le commentaire de chaque section a été "
+            "rédigé avec l'aide d'un assistant IA spécialisé dans ce sujet, à partir des seules figures "
+            "de la section."
         ),
-        f"*Patterns based on fewer than {SAMPLE_THRESHOLD} incidents are flagged as indicative in the text.*",
+        f"*Les patterns basés sur moins de {SAMPLE_THRESHOLD} incidents sont signalés comme indicatifs dans le texte.*",
     ]
     return "\n\n".join(paragraphs)
 
 
 def section_cost_timeline(ctx: SectionContext) -> str:
-    """3. Cost timeline — trend, dominant incidents, sequences and seasonality."""
+    """3. Chronologie des coûts — tendance, incidents dominants, séquences et saisonnalité."""
     stats = ctx.stats
     answer = ctx.ask(
         "cost_timeline",
-        "3. Cost timeline",
-        role="a reliability engineer who analyses the cost history and recurrence of incidents on PV inverters.",
+        "3. Chronologie des coûts",
+        role="un ingénieur fiabilité qui analyse l'historique des coûts et la récurrence des incidents sur des onduleurs PV.",
         questions=[
             (
-                "How did the number of incidents and their cost evolve year by year? Comment on every "
-                "year, including the change in the last year, using the year-on-year changes given."
+                "Comment le nombre d'incidents et leur coût ont-ils évolué année par année ? Commente "
+                "chaque année, y compris le changement de la dernière année, en utilisant les variations "
+                "annuelles fournies."
             ),
-            "Which incidents dominate the cost (`most_costly_incidents`) and what are their failure modes?",
+            "Quels incidents dominent le coût (`most_costly_incidents`) et quels sont leurs modes de défaillance ?",
             (
-                "Are there close sequences of incidents or quick recurrences of the same failure mode? "
-                "Name the incidents and failure modes involved."
+                "Y a-t-il des séquences rapprochées d'incidents ou des récurrences rapides du même mode "
+                "de défaillance ? Nomme les incidents et modes de défaillance impliqués."
             ),
-            "Is there a seasonal pattern? Flag seasons with few incidents as indicative.",
+            "Y a-t-il un pattern saisonnier ? Signale les saisons avec peu d'incidents comme indicatives.",
         ],
         data={
             "cost_timeline_figure": ctx.figures["cost_timeline"],
@@ -1699,12 +1965,12 @@ def section_cost_timeline(ctx: SectionContext) -> str:
         },
         schema=_object(
             {
-                "trend": _text("Answer to question 1 (2-4 sentences)."),
-                "dominant_incidents": _text("Answer to question 2 (1-3 sentences)."),
+                "trend": _text("Réponse à la question 1 (2-4 phrases)."),
+                "dominant_incidents": _text("Réponse à la question 2 (1-3 phrases)."),
                 "sequences_and_recurrences": _text(
-                    "Answer to question 3 (1-3 sentences)."
+                    "Réponse à la question 3 (1-3 phrases)."
                 ),
-                "seasonality": _text("Answer to question 4 (1-2 sentences)."),
+                "seasonality": _text("Réponse à la question 4 (1-2 phrases)."),
             }
         ),
     )
@@ -1722,49 +1988,50 @@ def section_cost_timeline(ctx: SectionContext) -> str:
     yearly_table = _md_table(
         years,
         {
-            "year": "Year",
+            "year": "Année",
             "n_incidents": "Incidents",
-            "n_severe": "Severe",
-            "cost": "Cost (EUR)",
-            "change": "Cost vs previous year",
-            "downtime_h": "Downtime (h)",
+            "n_severe": "Sévères",
+            "cost": "Coût (EUR)",
+            "change": "Évolution vs année précédente",
+            "downtime_h": "Temps d'arrêt (h)",
         },
     )
     return "\n\n".join(
         [
-            "## 3. Cost timeline",
-            _figure("cost_timeline", "Cost timeline"),
+            "## 3. Chronologie des coûts",
+            _figure("cost_timeline", "Chronologie des coûts"),
             (
-                "*Estimated cost of each moderate (hollow) and severe (filled) incident. Colour = family of "
-                "failure modes, marker shape = failure mode, grey cross = unclassified; the three most "
-                "costly incidents are labelled.*"
+                "*Coût estimé de chaque incident modéré (creux) et sévère (plein). Couleur = famille de "
+                "modes de défaillance, forme du marqueur = mode de défaillance, croix grise = non classé ; "
+                "les trois incidents les plus coûteux sont étiquetés.*"
             ),
             yearly_table,
-            f"**Trend.** {answer['trend']}",
-            f"**Dominant incidents.** {answer['dominant_incidents']}",
-            f"**Sequences and recurrences.** {answer['sequences_and_recurrences']}",
-            f"**Seasonality.** {answer['seasonality']}",
+            f"**Tendance.** {answer['trend']}",
+            f"**Incidents dominants.** {answer['dominant_incidents']}",
+            f"**Séquences et récurrences.** {answer['sequences_and_recurrences']}",
+            f"**Saisonnalité.** {answer['seasonality']}",
         ]
     )
 
 
 def section_weather(ctx: SectionContext) -> str:
-    """4. Weather exposure — downtime vs weather and failure modes vs weather."""
+    """4. Exposition météorologique — temps d'arrêt vs météo et modes de défaillance vs météo."""
     downtime = ctx.figures["downtime_weather"]
     answer = ctx.ask(
         "weather",
-        "4. Weather exposure",
-        role="an engineer specialised in the weather and environmental exposure of PV plants.",
+        "4. Exposition météorologique",
+        role="un ingénieur spécialisé dans l'exposition météorologique et environnementale des centrales PV.",
         questions=[
             (
-                "Under which weather conditions does this equipment lose the most hours? Are these "
-                "conditions over- or under-represented compared with the rest of the site "
-                "(`representation`)?"
+                "Sous quelles conditions météorologiques cet équipement perd-il le plus d'heures ? Ces "
+                "conditions sont-elles sur- ou sous-représentées par rapport au reste du site "
+                "(`representation`) ?"
             ),
             (
-                "Which failure modes occur under which weather conditions? Read each row of the "
-                "matrix: link a weather condition to a failure mode only if it appears in that row. "
-                "What does it imply for operations (e.g. inspections after a given weather event)?"
+                "Quels modes de défaillance se produisent sous quelles conditions météorologiques ? "
+                "Lis chaque ligne de la matrice : associe une condition météorologique à un mode de "
+                "défaillance uniquement si elle apparaît dans cette ligne. Quelles implications pour "
+                "l'exploitation (ex : inspections après un événement météo donné) ?"
             ),
         ],
         data={
@@ -1774,9 +2041,9 @@ def section_weather(ctx: SectionContext) -> str:
         },
         schema=_object(
             {
-                "downtime_vs_weather": _text("Answer to question 1 (2-4 sentences)."),
+                "downtime_vs_weather": _text("Réponse à la question 1 (2-4 phrases)."),
                 "failure_modes_vs_weather": _text(
-                    "Answer to question 2 (2-4 sentences)."
+                    "Réponse à la question 2 (2-4 phrases)."
                 ),
             }
         ),
@@ -1785,33 +2052,33 @@ def section_weather(ctx: SectionContext) -> str:
     table = _md_table(
         downtime["rows"],
         {
-            "weather_condition": "Weather",
+            "weather_condition": "Météo",
             "n_incidents": "Incidents",
-            "n_severe": "Severe",
-            "downtime_total_h": "Downtime (h)",
-            "downtime_median_h": "Median (h)",
-            "share_of_equipment_downtime_pct": "% of downtime",
-            "representation": "Compared with site",
+            "n_severe": "Sévères",
+            "downtime_total_h": "Temps d'arrêt (h)",
+            "downtime_median_h": "Médiane (h)",
+            "share_of_equipment_downtime_pct": "% du temps d'arrêt",
+            "representation": "Vs site",
         },
     )
     return "\n\n".join(
         [
-            "## 4. Weather exposure",
-            "### 4.1 Downtime vs weather condition",
-            _figure("downtime_weather", "Downtime vs weather"),
-            "*Downtime of each incident per weather condition; the black tick is the median.*",
+            "## 4. Exposition météorologique",
+            "### 4.1 Temps d'arrêt vs condition météorologique",
+            _figure("downtime_weather", "Temps d'arrêt vs météo"),
+            "*Temps d'arrêt de chaque incident par condition météorologique ; le trait noir est la médiane.*",
             table,
             answer["downtime_vs_weather"],
-            "### 4.2 Failure modes vs weather condition",
-            _figure("cluster_weather", "Failure modes vs weather"),
-            "*Number of incidents per failure mode and weather condition.*",
+            "### 4.2 Modes de défaillance vs condition météorologique",
+            _figure("cluster_weather", "Modes de défaillance vs météo"),
+            "*Nombre d'incidents par mode de défaillance et condition météorologique.*",
             answer["failure_modes_vs_weather"],
         ]
     )
 
 
 def section_failure_modes(ctx: SectionContext) -> str:
-    """5. Failure modes — summary table + one paragraph per failure mode."""
+    """5. Modes de défaillance — tableau récapitulatif + un paragraphe par mode de défaillance."""
     modes = ctx.failure_modes
     names = [mode["failure_mode"] for mode in modes]
     refs_by_mode = {
@@ -1826,27 +2093,27 @@ def section_failure_modes(ctx: SectionContext) -> str:
             if n not in {e["failure_mode"] for e in answer["failure_modes"]}
         ]
         if missing:
-            problems.append(f"no entry for failure mode(s): {'; '.join(missing)}")
+            problems.append(f"pas d'entrée pour le(s) mode(s) de défaillance : {'; '.join(missing)}")
         for entry in answer["failure_modes"]:
             text = entry["mechanism"] + " " + entry["evidence_and_impact"]
             wrong = _wrong_refs(text, refs_by_mode[entry["failure_mode"]])
             if wrong:
                 problems.append(
-                    f"{', '.join(wrong)} cited for {entry['failure_mode']}, which they do not belong to"
+                    f"{', '.join(wrong)} cités pour {entry['failure_mode']}, auxquels ils n'appartiennent pas"
                 )
         return problems
 
     answer = ctx.ask(
         "failure_modes",
-        "5. Failure modes",
-        role="a PV failure-analysis expert (inverters, DC cabling, junction boxes, modules, fire risk).",
+        "5. Modes de défaillance",
+        role="un expert en analyse de défaillances PV (onduleurs, câblage CC, boîtes de jonction, modules, risque d'incendie).",
         questions=[
-            "For each failure mode, in this order: "
+            "Pour chaque mode de défaillance, dans cet ordre : "
             + "; ".join(f'"{n}"' for n in names)
-            + ", give "
-            "(a) its probable physical mechanism on a PV inverter and its DC field, and "
-            "(b) the evidence on this equipment — incidents (only from that failure mode's "
-            "`incidents`), dates, severity, cost, recurrences — and its impact.",
+            + ", donne "
+            "(a) son mécanisme physique probable sur un onduleur PV et son champ CC, et "
+            "(b) les preuves sur cet équipement — incidents (uniquement ceux de ce mode de "
+            "défaillance), dates, sévérité, coût, récurrences — et son impact.",
         ],
         data={"failure_modes": modes, "facts": ctx.facts["priorities"]},
         schema=_object(
@@ -1855,17 +2122,17 @@ def section_failure_modes(ctx: SectionContext) -> str:
                     _object(
                         {
                             "failure_mode": _choice(
-                                names, "Failure mode name, verbatim."
+                                names, "Nom du mode de défaillance, verbatim."
                             ),
                             "mechanism": _text(
-                                "Probable physical mechanism (1-2 sentences)."
+                                "Mécanisme physique probable (1-2 phrases)."
                             ),
                             "evidence_and_impact": _text(
-                                "Evidence on this equipment and impact (1-3 sentences)."
+                                "Preuves sur cet équipement et impact (1-3 phrases)."
                             ),
                         }
                     ),
-                    "Exactly one entry per failure mode.",
+                    "Exactement une entrée par mode de défaillance.",
                 ),
             }
         ),
@@ -1883,30 +2150,30 @@ def section_failure_modes(ctx: SectionContext) -> str:
             for mode in modes
         ],
         {
-            "failure_mode": "Failure mode",
-            "recommendation_priority": "Priority",
+            "failure_mode": "Mode de défaillance",
+            "recommendation_priority": "Priorité",
             "n_incidents": "Incidents",
-            "n_severe": "Severe",
-            "cost": "Cost (EUR)",
-            "cost_share_pct": "% of cost",
-            f"recurrences_within_{RECURRENCE_DAYS}_days": f"Recurrences < {RECURRENCE_DAYS} d",
+            "n_severe": "Sévères",
+            "cost": "Coût (EUR)",
+            "cost_share_pct": "% du coût",
+            f"recurrences_within_{RECURRENCE_DAYS}_days": f"Récurrences < {RECURRENCE_DAYS} j",
             "refs": "Incidents #",
         },
     )
-    parts = ["## 5. Failure modes", table]
+    parts = ["## 5. Modes de défaillance", table]
     for mode in modes:
         name = mode["failure_mode"]
         parts.append(f"### {name} · {mode['recommendation_priority']}")
         entry = by_name.get(name)
         if entry is None:
-            parts.append("*No commentary generated.*")
+            parts.append("*Aucun commentaire généré.*")
             continue
         parts.append(f"{entry['mechanism']} {entry['evidence_and_impact']}")
     return "\n\n".join(parts)
 
 
 def section_root_causes(ctx: SectionContext) -> str:
-    """6. Root-cause hypotheses — confidence computed from the supporting incidents."""
+    """6. Hypothèses de causes racines — confiance calculée à partir des incidents à l'appui."""
     modes = ctx.failure_modes
     names = [mode["failure_mode"] for mode in modes]
     refs_by_mode = {
@@ -1927,25 +2194,25 @@ def section_root_causes(ctx: SectionContext) -> str:
             wrong = _wrong_refs(text, sorted(allowed_refs(hypothesis)))
             if wrong:
                 problems.append(
-                    f"hypothesis {i} cites {', '.join(wrong)}, which do not belong to its failure modes"
+                    f"l'hypothèse {i} cite {', '.join(wrong)}, qui n'appartiennent pas à ses modes de défaillance"
                 )
         return problems
 
     answer = ctx.ask(
         "root_causes",
-        "6. Root-cause hypotheses",
-        role="a root-cause analysis (RCA) engineer for PV plants.",
+        "6. Hypothèses de causes racines",
+        role="un ingénieur en analyse de causes racines (RCA) pour les centrales PV.",
         questions=[
             (
-                "Propose 3 to 5 root-cause hypotheses explaining the incidents of this equipment. A "
-                "hypothesis may cover one failure mode or a common cause behind several (e.g. heat "
-                "stress, poor connections, lightning exposure)."
+                "Propose 3 à 5 hypothèses de causes racines expliquant les incidents de cet équipement. "
+                "Une hypothèse peut couvrir un mode de défaillance ou une cause commune derrière plusieurs "
+                "(ex : stress thermique, mauvaises connexions, exposition à la foudre)."
             ),
             (
-                "For each hypothesis, list the failure modes it explains and the incidents supporting "
-                "it — only incidents belonging to those failure modes."
+                "Pour chaque hypothèse, liste les modes de défaillance qu'elle explique et les incidents "
+                "qui la soutiennent — uniquement les incidents appartenant à ces modes de défaillance."
             ),
-            "Explain the reasoning in 1-3 sentences (mechanism, weather or timing patterns).",
+            "Explique le raisonnement en 1-3 phrases (mécanisme, patterns météo ou temporels).",
         ],
         data={
             "failure_modes": [
@@ -1977,20 +2244,20 @@ def section_root_causes(ctx: SectionContext) -> str:
                     _object(
                         {
                             "hypothesis": _text(
-                                "The root-cause hypothesis, in one sentence."
+                                "L'hypothèse de cause racine, en une phrase."
                             ),
                             "failure_modes": _list(
-                                _choice(names, "Failure mode name."),
-                                "Failure modes explained.",
+                                _choice(names, "Nom du mode de défaillance."),
+                                "Modes de défaillance expliqués.",
                             ),
                             "supporting_incidents": _list(
-                                _choice(ctx.refs, "Incident number."),
-                                "Incidents supporting the hypothesis.",
+                                _choice(ctx.refs, "Numéro d'incident."),
+                                "Incidents soutenant l'hypothèse.",
                             ),
-                            "reasoning": _text("Reasoning (1-3 sentences)."),
+                            "reasoning": _text("Raisonnement (1-3 phrases)."),
                         }
                     ),
-                    "3 to 5 hypotheses.",
+                    "3 à 5 hypothèses.",
                 ),
             }
         ),
@@ -1999,31 +2266,31 @@ def section_root_causes(ctx: SectionContext) -> str:
 
     items = []
     for i, hypothesis in enumerate(answer["hypotheses"], 1):
-        # Incidents outside the hypothesis' failure modes never count as support
+        # Les incidents hors des modes de défaillance de l'hypothèse ne comptent jamais comme soutien
         support = sorted(
             set(hypothesis["supporting_incidents"]) & allowed_refs(hypothesis),
             key=lambda ref: int(ref[1:]),
         )
         if len(support) >= CONFIDENCE_HIGH_MIN_INCIDENTS:
-            confidence = "high"
+            confidence = "élevée"
         elif len(support) >= SAMPLE_THRESHOLD:
-            confidence = "medium"
+            confidence = "moyenne"
         else:
-            confidence = "low"
+            confidence = "faible"
         items.append(
-            f"{i}. **{hypothesis['hypothesis']}** — *confidence: {confidence} "
-            f"({len(support)} supporting incident{'s' if len(support) != 1 else ''}"
+            f"{i}. **{hypothesis['hypothesis']}** — *confiance : {confidence} "
+            f"({len(support)} incident{'s' if len(support) != 1 else ''} à l'appui"
             f"{': ' + ', '.join(support) if support else ''})*  \n"
-            f"   Failure modes: {', '.join(hypothesis['failure_modes'])}.  \n"
+            f"   Modes de défaillance : {', '.join(hypothesis['failure_modes'])}.  \n"
             f"   {hypothesis['reasoning']}"
         )
     return "\n\n".join(
-        ["## 6. Root-cause hypotheses", "\n".join(items) or DRY_RUN_TEXT]
+        ["## 6. Hypothèses de causes racines", "\n".join(items) or DRY_RUN_TEXT]
     )
 
 
 def section_recommendations(ctx: SectionContext) -> str:
-    """7. Recommendations — each action inherits the priority of its failure mode."""
+    """7. Recommandations — chaque action hérite de la priorité de son mode de défaillance."""
     modes = ctx.failure_modes
     names = [mode["failure_mode"] for mode in modes]
     priority_of = {
@@ -2031,11 +2298,11 @@ def section_recommendations(ctx: SectionContext) -> str:
     }
     p1 = [name for name in names if priority_of[name] == "P1"]
     coverage = (
-        "Address every failure mode of priority P1 ("
+        "Adresse chaque mode de défaillance de priorité P1 ("
         + "; ".join(f'"{n}"' for n in p1)
-        + ") with at least one action."
+        + ") avec au moins une action."
         if p1
-        else "Start with the failure modes of priority P2."
+        else "Commence par les modes de défaillance de priorité P2."
     )
     hypotheses = ctx.answers.get("root_causes", {}).get("hypotheses", [])
 
@@ -2044,26 +2311,26 @@ def section_recommendations(ctx: SectionContext) -> str:
             set(p1) - {a["target_failure_mode"] for a in answer["actions"]}
         )
         return (
-            [f"no action for the P1 failure mode(s): {'; '.join(missing)}"]
+            [f"pas d'action pour le(s) mode(s) de défaillance P1 : {'; '.join(missing)}"]
             if missing
             else []
         )
 
     answer = ctx.ask(
         "recommendations",
-        "7. Recommendations",
-        role="an O&M maintenance planner for utility-scale PV plants.",
+        "7. Recommandations",
+        role="un planificateur de maintenance O&M pour des centrales PV de taille industrielle.",
         questions=[
             (
-                "Propose 4 to 7 concrete actions for the maintenance team, each addressing one failure "
-                "mode of this equipment (thermography, IV-curve tracing, insulation resistance tests, "
-                "connector torque checks, surge protection inspection, cleaning schedule, fire-risk "
-                "inspection, spare parts…)."
+                "Propose 4 à 7 actions concrètes pour l'équipe de maintenance, chacune adressant un mode "
+                "de défaillance de cet équipement (thermographie, tracé de courbe IV, tests de résistance "
+                "d'isolement, vérification du couple des connecteurs, inspection des protections contre les "
+                "surtensions, planning de nettoyage, inspection du risque d'incendie, pièces de rechange…)."
             ),
             coverage,
             (
-                "Use the root-cause hypotheses to choose the actions. For each action, state the "
-                "expected impact qualitatively, citing only figures from the input."
+                "Utilise les hypothèses de causes racines pour choisir les actions. Pour chaque action, "
+                "indique l'impact attendu qualitativement, en ne citant que des chiffres de l'entrée."
             ),
         ],
         data={
@@ -2094,25 +2361,25 @@ def section_recommendations(ctx: SectionContext) -> str:
                     _object(
                         {
                             "action": _text(
-                                "Concrete maintenance or technical action."
+                                "Action de maintenance ou technique concrète."
                             ),
                             "type": _choice(
                                 [
-                                    "preventive",
+                                    "préventive",
                                     "corrective",
-                                    "monitoring",
-                                    "design change",
-                                    "spare parts",
+                                    "surveillance",
+                                    "modification",
+                                    "pièces de rechange",
                                 ],
-                                "Action type.",
+                                "Type d'action.",
                             ),
                             "target_failure_mode": _choice(
-                                names, "Failure mode addressed (sets the priority)."
+                                names, "Mode de défaillance adressé (définit la priorité)."
                             ),
-                            "expected_impact": _text("Expected effect (1 sentence)."),
+                            "expected_impact": _text("Impact attendu (1 phrase)."),
                         }
                     ),
-                    "4 to 7 actions.",
+                    "4 à 7 actions.",
                 ),
             }
         ),
@@ -2130,14 +2397,14 @@ def section_recommendations(ctx: SectionContext) -> str:
     table = _md_table(
         actions,
         {
-            "priority": "Priority",
+            "priority": "Priorité",
             "action": "Action",
             "type": "Type",
-            "target_failure_mode": "Failure mode addressed",
-            "expected_impact": "Expected impact",
+            "target_failure_mode": "Mode de défaillance adressé",
+            "expected_impact": "Impact attendu",
         },
     )
-    return "\n\n".join(["## 7. Recommendations", table if actions else DRY_RUN_TEXT])
+    return "\n\n".join(["## 7. Recommandations", table if actions else DRY_RUN_TEXT])
 
 
 def _first_actions(ctx: SectionContext) -> list[dict]:
@@ -2155,16 +2422,16 @@ def _first_actions(ctx: SectionContext) -> list[dict]:
 
 
 def section_conclusion(ctx: SectionContext) -> str:
-    """8. Conclusion — written after the recommendations, which it refers to."""
+    """8. Conclusion — rédigée après les recommandations, qu'elle référence."""
     equipment = ctx.stats["equipment"]
     answer = ctx.ask(
         "conclusion",
         "8. Conclusion",
-        role="the reliability manager who signs off equipment reports.",
+        role="le responsable fiabilité qui signe les rapports d'équipement.",
         questions=[
             (
-                "In 2-3 sentences: the main issue of this equipment, what to do first (the actions "
-                "given) and the expected benefit."
+                "En 2-3 phrases : le problème principal de cet équipement, quoi faire en premier (les "
+                "actions indiquées) et le bénéfice attendu."
             ),
         ],
         data={
@@ -2176,23 +2443,23 @@ def section_conclusion(ctx: SectionContext) -> str:
             "failure_mode_priorities": ctx.facts["priorities"],
             "first_actions": _first_actions(ctx),
         },
-        schema=_object({"conclusion": _text("2-3 sentence conclusion.")}),
+        schema=_object({"conclusion": _text("Conclusion en 2-3 phrases.")}),
     )
     return "\n\n".join(["## 8. Conclusion", answer["conclusion"]])
 
 
 def section_summary(ctx: SectionContext) -> str:
-    """Report header — title and executive summary, written once every other section is known."""
+    """En-tête du rapport — titre et résumé exécutif, rédigé une fois toutes les autres sections connues."""
     equipment = ctx.stats["equipment"]
     answer = ctx.ask(
         "summary",
-        "Title and executive summary",
-        role="an executive-summary writer for asset managers of PV plants.",
+        "Titre et résumé exécutif",
+        role="un rédacteur de résumés exécutifs pour les gestionnaires d'actifs de centrales PV.",
         questions=[
-            "Give the report a short title naming the equipment ID and its main failure modes.",
+            "Donne au rapport un titre court nommant l'identifiant de l'équipement et ses principaux modes de défaillance.",
             (
-                "Write a 3-4 sentence executive summary: what fails, how much it costs, how the "
-                "equipment compares with its site and what to do first."
+                "Rédige un résumé exécutif de 3-4 phrases : ce qui tombe en panne, combien cela coûte, "
+                "comment l'équipement se compare à son site et quoi faire en premier."
             ),
         ],
         data={
@@ -2205,15 +2472,15 @@ def section_summary(ctx: SectionContext) -> str:
         },
         schema=_object(
             {
-                "title": _text("Short report title naming the equipment."),
-                "synopsis": _text("3-4 sentence executive summary."),
+                "title": _text("Titre court du rapport nommant l'équipement."),
+                "synopsis": _text("Résumé exécutif de 3-4 phrases."),
             }
         ),
     )
     title = (
         answer["title"]
         if answer["title"] != DRY_RUN_TEXT
-        else f"Incident report — {ctx.equipment_id}"
+        else f"Rapport d'incidents — {ctx.equipment_id}"
     )
     priority = equipment["equipment_priority"]
     why = equipment["why_selected"]
@@ -2221,12 +2488,12 @@ def section_summary(ctx: SectionContext) -> str:
         [
             f"# {title}",
             (
-                f"**Equipment:** {ctx.equipment_id} · **Site:** {ctx.site} · **Asset type:** PV inverter · "
-                f"**Generated on:** {date.today().isoformat()}"
+                f"**Équipement :** {ctx.equipment_id} · **Site :** {ctx.site} · **Type d'actif :** Onduleur PV · "
+                f"**Généré le :** {date.today().isoformat()}"
             ),
             f"> {answer['synopsis']}",
             (
-                f"**Equipment priority: {priority} · Risk level: {equipment['risk_level'].upper()}** — "
+                f"**Priorité équipement : {priority} · Niveau de risque : {equipment['risk_level'].upper()}** — "
                 f"{why[0].upper()}{why[1:]}."
             ),
         ]
@@ -2234,21 +2501,21 @@ def section_summary(ctx: SectionContext) -> str:
 
 
 def section_incident_register(ctx: SectionContext) -> str:
-    """Annex — incident register, no agent."""
+    """Annexe — registre des incidents, sans agent."""
     rows = [{**r, "cost": format_eur(r["cost_eur"])} for r in ctx.stats["register"]]
     table = _md_table(
         rows,
         {
             "ref": "#",
             "date": "Date",
-            "severity": "Severity",
-            "failure_mode": "Failure mode",
-            "cost": "Cost (EUR)",
-            "downtime_h": "Downtime (h)",
-            "weather_condition": "Weather",
+            "severity": "Sévérité",
+            "failure_mode": "Mode de défaillance",
+            "cost": "Coût (EUR)",
+            "downtime_h": "Temps d'arrêt (h)",
+            "weather_condition": "Météo",
         },
     )
-    return f"### Annex — Incident register\n\n{table}"
+    return f"### Annexe — Registre des incidents\n\n{table}"
 
 
 # Generation order: the conclusion and the summary come after the sections
