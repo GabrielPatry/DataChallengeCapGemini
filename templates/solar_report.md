@@ -1,15 +1,15 @@
 # {{ report_title }}
 
-**Asset type:** {{ asset_label }} · **Generated on:** {{ generation_date }}
+**Type d'actif :** {{ asset_label }} · **Généré le :** {{ generation_date }}
 
 ## Synopsis
 > {{ synopsis }}
 
 ---
 
-## 1. Key figures
+## 1. Chiffres clés
 
-| Indicator | Value |
+| Indicateur | Valeur |
 | --- | ---: |
 | Incidents analysed | {{ n_incidents }} |
 | Sites covered | {{ n_sites }} |
@@ -23,7 +23,7 @@
 | Median downtime per incident | {{ median_downtime_per_incident }} h |
 | Average cost per downtime hour | {{ avg_cost_per_downtime_hour }} EUR/h |
 
-**Severity breakdown:** {{ n_minor }} minor · {{ n_moderate }} moderate · {{ n_severe }} severe
+**Répartition par sévérité :** {{ n_minor }} mineure · {{ n_moderate }} modérée · {{ n_severe }} sévère
 
 **Most costly site:** {{ top_site_by_cost }} — **most costly equipment:** {{ top_equipment_by_cost }}
 
@@ -34,69 +34,73 @@
 
 *Year-over-Year Change in Incident Costs and Downtime.*
 
-## 2. Cost analysis
+## 2. Analyse des coûts
 
 {{ methodology }}
 
-### 2.1 Cost per site
+### 2.1 Coût par site
 
 {{ figure_plot_total_cost_by_site }}
 
-*Total estimated cost per site, split by asset type.*
+*Coût total estimé (barres rouges) et nombre d'incidents (courbe bleue) par site.*
 
-### 2.2 Cost distribution per equipment
+{{ interpretation_plot_total_cost_by_site }}
+
+### 2.2 Distribution du coût par équipement
 
 {{ figure_plot_cost_distribution_per_equipment_by_site }}
 
-*Distribution of the total estimated cost per equipment, grouped by site.*
+*Distribution du coût total estimé par équipement, groupée par site.*
 
-### 2.3 Daily cost of the most impacted equipment
-
-{{ figure_plot_daily_cost_for_equipment }}
-
-*Daily estimated cost over time for the equipment with the highest total cost.*
-
-### 2.4 Top equipment at the highest-cost site
+### 2.3 Top 3 des équipements les plus coûteux du site le plus impacté
 
 {{ figure_plot_daily_cost_top_equipment_at_top_site }}
 
-*Daily estimated cost of the top-3 equipment at the site with the highest total cost.*
+*Coût estimé quotidien des 3 équipements les plus coûteux du site dont le coût total estimé est le plus élevé.*
 
-### 2.5 Downtime vs cost
+## 3. Analyse temporelle et par sévérité
 
-{{ figure_plot_downtime_vs_cost }}
-
-*Estimated cost against downtime duration, coloured by severity.*
-
-## 3. Temporal and severity analysis
-
-### 3.1 Monthly incident count
+### 3.1 Nombre d'incidents et coût par mois
 
 {{ figure_plot_monthly_incident_count }}
 
-*Number of incidents per month over the period, split by asset type.*
+*Nombre d'incidents (barres bleues) et coût total estimé (courbe rouge) par mois sur la période.*
 
-### 3.2 Incidents by severity
+{{ interpretation_plot_monthly_incident_count }}
+
+### 3.2 Incidents et coût par sévérité
 
 {{ figure_plot_incident_count_by_severity }}
 
-*Number of incidents per severity level, split by asset type.*
+*Nombre d'incidents (barres bleues) et coût total estimé (courbe rouge) par niveau de sévérité.*
 
-### 3.3 Weather conditions
+{{ interpretation_plot_incident_count_by_severity }}
+
+### 3.3 Conditions météorologiques
 
 {{ figure_plot_total_cost_by_weather_condition }}
 
-*Total estimated cost per weather condition, split by asset type.*
+*Coût total estimé (barres rouges) et nombre d'incidents (courbe bleue) par condition météorologique.*
 
-## 4. Thematic clusters
+{{ interpretation_plot_total_cost_by_weather_condition }}
 
-{{ n_clusters }} incident clusters were identified from the report descriptions.
+## 4. Clusters thématiques
+
+{{ n_clusters }} clusters d'incidents ont été identifiés à partir des descriptions des rapports.
 
 {{ top_clusters_table }}
 
+### 4.1 Fréquence et coût par cluster
+
+{{ figure_plot_cluster_frequency_cost }}
+
+*Nombre d'incidents (barres bleues) et coût total estimé (courbe rouge) par cluster thématique.*
+
+{{ interpretation_plot_cluster_frequency_cost }}
+
 {{ cluster_sections }}
 
-## 5. Recommendations
+## 5. Recommandations
 
 {{ recommendations }}
 
