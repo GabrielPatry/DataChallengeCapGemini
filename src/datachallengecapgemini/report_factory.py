@@ -158,25 +158,23 @@ class TokenUsageCallback(BaseCallbackHandler):
 
 SYNOPSIS_SYSTEM_PROMPT = (
     "Tu es le rédacteur technique d'un rapport d'analyse d'incidents "
-"sur des actifs industriels. Rédige un synopsis exécutif concis "
-"(un paragraphe de 100 à 200 mots) pour le parc {label}.\n\n"
-
-"Le synopsis doit présenter :\n"
-"- les principaux thèmes d'incidents et leur poids dans le coût "
-"estimé et le temps d'arrêt, à partir des statistiques et du résumé "
-"des clusters ;\n"
-"- les chiffres clés de la performance globale : nombre total "
-"d'incidents, coût total estimé, temps d'arrêt total, répartition "
-"par sévérité et coût moyen par incident ;\n"
-"- l'évolution annuelle, en mettant en évidence la variation du "
-"coût total et du temps d'arrêt entre les deux dernières années "
-"disponibles, si ces données sont fournies.\n\n"
-
-"Utilise uniquement les statistiques, le résumé des clusters et "
-"les descriptions des figures fournis. N'invente aucun chiffre et "
-"ne déduis pas de causalité non démontrée. Priorise les informations "
-"les plus significatives plutôt que d'énumérer toutes les statistiques. "
-"Rédige en français, avec un ton professionnel, analytique et concis."
+    "sur des actifs industriels. Rédige un synopsis exécutif concis "
+    "(un paragraphe de 100 à 200 mots) pour le parc {label}.\n\n"
+    "Le synopsis doit présenter :\n"
+    "- les principaux thèmes d'incidents et leur poids dans le coût "
+    "estimé et le temps d'arrêt, à partir des statistiques et du résumé "
+    "des clusters ;\n"
+    "- les chiffres clés de la performance globale : nombre total "
+    "d'incidents, coût total estimé, temps d'arrêt total, répartition "
+    "par sévérité et coût moyen par incident ;\n"
+    "- l'évolution annuelle, en mettant en évidence la variation du "
+    "coût total et du temps d'arrêt entre les deux dernières années "
+    "disponibles, si ces données sont fournies.\n\n"
+    "Utilise uniquement les statistiques, le résumé des clusters et "
+    "les descriptions des figures fournis. N'invente aucun chiffre et "
+    "ne déduis pas de causalité non démontrée. Priorise les informations "
+    "les plus significatives plutôt que d'énumérer toutes les statistiques. "
+    "Rédige en français, avec un ton professionnel, analytique et concis."
 )
 
 METHODOLOGY_SYSTEM_PROMPT = (
@@ -402,9 +400,7 @@ class ReportFactory:
         severity_counts = df["severity"].value_counts()
 
         top_site = df.groupby("site")["estimated_cost_eur"].sum().idxmax()
-        top_equipment = (
-            df.groupby("equipment_id")["estimated_cost_eur"].sum().idxmax()
-        )
+        top_equipment = df.groupby("equipment_id")["estimated_cost_eur"].sum().idxmax()
 
         severity_breakdown = ", ".join(
             f"{level}: {int(severity_counts.get(level, 0))}"
@@ -419,11 +415,7 @@ class ReportFactory:
         median_downtime = df["downtime_hours"].median()
 
         # Cost per downtime hour
-        cost_per_hour = (
-            total_cost / total_downtime
-            if total_downtime > 0
-            else None
-        )
+        cost_per_hour = total_cost / total_downtime if total_downtime > 0 else None
 
         # Yearly statistics
         yearly = (
@@ -495,9 +487,7 @@ class ReportFactory:
                 f"{percentage_change(last['cost'], previous['cost'])}"
             )
         else:
-            lines.append(
-                "- Comparaison impossible : moins de deux années disponibles."
-            )
+            lines.append("- Comparaison impossible : moins de deux années disponibles.")
 
         return "\n".join(lines)
 
@@ -831,7 +821,7 @@ class ReportFactory:
                 *equip_ids,
                 "--solar-csv",
                 str(solar_csv),
-            ]
+            ]  # Pour un déploiment effectif, il faudrait bien sûr retirer 'uv run' avant 'dc equipment'
             if force:
                 cmd.append("--force")
 
@@ -864,9 +854,7 @@ class ReportFactory:
             ]
             for equip in info["equipment"]:
                 equip_id = equip["equipment_id"]
-                sections_dir = (
-                    equipment_reports_dir / site_code / equip_id / "sections"
-                )
+                sections_dir = equipment_reports_dir / site_code / equip_id / "sections"
                 parts.append(
                     f"\nÉquipement : {equip_id} "
                     f"(coût : {equip['total_cost_eur']:,.0f} EUR, "
@@ -886,9 +874,7 @@ class ReportFactory:
                         parts.append(f"\n--- {section_name} ---\n{text}")
                         section_found = True
                 if not section_found:
-                    parts.append(
-                        "\n*Rapport d'équipement non disponible.*"
-                    )
+                    parts.append("\n*Rapport d'équipement non disponible.*")
             context_parts.append("\n".join(parts))
 
         self.equipment_insights = "\n\n".join(context_parts)
@@ -1214,7 +1200,7 @@ def build_report_context(
     cluster_descriptions = prose.cluster_descriptions
     if not isinstance(cluster_descriptions, list):
         raise TypeError("The 'cluster_descriptions' prose value must be a list.")
-    
+
     median_cost = df["estimated_cost_eur"].median()
     mean_downtime = df["downtime_hours"].mean()
     median_downtime = df["downtime_hours"].median()
@@ -1226,11 +1212,9 @@ def build_report_context(
     dates = pd.to_datetime(df["date"])
     top_site = df.groupby("site")["estimated_cost_eur"].sum().idxmax()
     top_equipment = df.groupby("equipment_id")["estimated_cost_eur"].sum().idxmax()
-    cost_per_hour= (
-            total_cost / total_downtime
-            if total_downtime > 0
-            else "non calculable"
-        )
+    cost_per_hour = (
+        total_cost / total_downtime if total_downtime > 0 else "non calculable"
+    )
 
     # Clusters, largest first; the noise cluster is reported separately
     cluster_counts = (
@@ -1250,9 +1234,7 @@ def build_report_context(
         name = cluster["cluster_name"]
         count = cluster["incident_count"]
         cell = (
-            f"{name} (non classé)"
-            if code == NOISE_CLUSTER_CODE
-            else f"{code} — {name}"
+            f"{name} (non classé)" if code == NOISE_CLUSTER_CODE else f"{code} — {name}"
         )
         rows.append(f"| {cell} | {count} | {100 * count / n_incidents:.1f}% |")
     top_clusters_table = "\n".join(rows)
@@ -1310,10 +1292,10 @@ def build_report_context(
         "cluster_sections": cluster_sections,
         "recommendations": prose.recommendations,
         "synthesis": "",
-        "median_cost_per_incident":f"{median_cost:,.2f}",
-        "avg_downtime_per_incident":f"{mean_downtime:,.2f}",
-        "median_downtime_per_incident":f"{median_downtime:,.2f}",
-        "avg_cost_per_downtime_hour":f"{cost_per_hour:,.2f}"
+        "median_cost_per_incident": f"{median_cost:,.2f}",
+        "avg_downtime_per_incident": f"{mean_downtime:,.2f}",
+        "median_downtime_per_incident": f"{median_downtime:,.2f}",
+        "avg_cost_per_downtime_hour": f"{cost_per_hour:,.2f}",
     }
 
     # Figure interpretation paragraphs (one per interpreted plot)
@@ -1339,8 +1321,7 @@ def build_report_context(
     html_dir = plots_dir / "html"
     if not png_dir.is_dir() and not html_dir.is_dir():
         raise FileNotFoundError(
-            f"No plots found in {plots_dir} — run the plotting step first "
-            "(uv run dc)."
+            f"No plots found in {plots_dir} — run the plotting step first (uv run dc)."
         )
     plot_names = sorted(
         {path.stem for path in png_dir.glob("plot_*.png")}
@@ -2206,7 +2187,9 @@ def section_failure_modes(ctx: SectionContext) -> str:
             if n not in {e["failure_mode"] for e in answer["failure_modes"]}
         ]
         if missing:
-            problems.append(f"pas d'entrée pour le(s) mode(s) de défaillance : {'; '.join(missing)}")
+            problems.append(
+                f"pas d'entrée pour le(s) mode(s) de défaillance : {'; '.join(missing)}"
+            )
         for entry in answer["failure_modes"]:
             text = entry["mechanism"] + " " + entry["evidence_and_impact"]
             wrong = _wrong_refs(text, refs_by_mode[entry["failure_mode"]])
@@ -2517,7 +2500,8 @@ def section_recommendations(ctx: SectionContext) -> str:
                                 "Hypothèse de cause racine (H1, H2…) dont découle l'action.",
                             ),
                             "target_failure_mode": _choice(
-                                names, "Mode de défaillance adressé (définit la priorité)."
+                                names,
+                                "Mode de défaillance adressé (définit la priorité).",
                             ),
                             "expected_impact": _text("Impact attendu (1 phrase)."),
                         }
