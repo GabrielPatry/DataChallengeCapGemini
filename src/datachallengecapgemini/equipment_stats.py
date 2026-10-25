@@ -83,6 +83,8 @@ SEASONS: dict[int, str] = {
     10: "automne",
     11: "automne",
 }
+# Seasons in calendar order, derived from SEASONS so the labels always match
+SEASON_ORDER: list[str] = list(dict.fromkeys(SEASONS[month] for month in (12, 3, 6, 9)))
 
 # Noise cluster of the clustering step (incidents without a clear failure
 # mode) and the label they get in the equipment reports
@@ -588,7 +590,7 @@ def build_equipment_stats(
     yearly = _yearly_trend(d, years)
 
     seasonality = []
-    for season in ("winter", "spring", "summer", "autumn"):
+    for season in SEASON_ORDER:
         g = d[d["date"].dt.month.map(SEASONS) == season]
         seasonality.append(
             {

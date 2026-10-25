@@ -222,7 +222,10 @@ After each answer, Python checks:
 
 - numbers that do not appear in the input data (invented figure);
 - `#k` that do not exist or do not belong to the cited failure mode;
-- section-specific checks (e.g. a P1 failure mode with no action).
+- section-specific checks (e.g. a P1 failure mode with no action, or a
+  recommendation whose failure mode is not explained by the root-cause
+  hypothesis H1, H2… it claims to address: every action must come from one
+  of the equipment's hypotheses, there is no generic action list in the prompt).
 
 If there are problems, the prompt is sent again with the list of problems (one
 correction round). Anything left is written to `sections/checks.txt`.

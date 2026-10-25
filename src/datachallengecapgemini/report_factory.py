@@ -1503,7 +1503,7 @@ Write every generated text field in French; the prompts may remain in English.
 2. `facts` are verified, ready-made sentences: when you quote one of their figures, copy it exactly with the meaning given there (e.g. do not swap "most costly incident" and "most costly failure mode", or the ratio of one indicator for another).
 3. Refer to incidents ONLY by their local number as written in the input (e.g. "#3"). Cite an incident for a failure mode only if it is listed among that failure mode's incidents.
 4. Before linking a weather condition to a failure mode, check that failure mode's weather counts: if the weather is not listed, the failure mode never occurred under it. Never generalise a weather pattern from one failure mode to another. Weather co-occurrence is a correlation, not a proof.
-5. When an entry is flagged "indicative only", say so briefly in the same sentence (e.g. "indicative, 2 incidents"). Never write a separate paragraph about data limitations.
+5. When an entry is flagged "indicatif uniquement" (fewer than 3 incidents), say so briefly in the same sentence (e.g. "indicatif, 2 incidents"). Never write a separate paragraph about data limitations.
 6. Priorities and risk levels are given: never change or re-derive them.
 7. No mention of datasets, files, score formulas, algorithms, clustering or AI. Say "failure mode", not "cluster". Failure-mode and weather names are in French: keep them verbatim.
 8. Answer only the questions of your section; other specialists write the other sections.
@@ -1666,8 +1666,11 @@ def _md_table(rows: list[dict], columns: dict[str, str]) -> str:
 
 
 def _numbers_in_text(text: str) -> list[str]:
-    """Numbers written in *text*, incident numbers (#k) and priorities (P1) excluded."""
-    text = re.sub(r"#\d+|\b[Pp]\d\b", " ", text)
+    """Numbers written in *text*; incident numbers (#k), priorities (P1),
+    hypotheses (H2) and site / equipment codes (EST2, OUEST1-INV06) excluded."""
+    text = re.sub(r"#\d+|\b[PpHh]\d\b|\b[A-Z]{2,}\d+(?:-[A-Z]{2,}\d+)?\b", " ", text)
+    # French decimal comma ("142,8 h") -> "142.8"; "207,762" stays a thousands separator
+    text = re.sub(r"(\d),(\d{1,2})(?!\d)", r"\1.\2", text)
     return [re.sub(r"[ ,  ]", "", n) for n in NUMBER_PATTERN.findall(text)]
 
 
@@ -2389,7 +2392,7 @@ def section_root_causes(ctx: SectionContext) -> str:
         else:
             confidence = "faible"
         items.append(
-            f"{i}. **{hypothesis['hypothesis']}** — *confiance : {confidence} "
+            f"- **H{i} — {hypothesis['hypothesis']}** — *confiance : {confidence} "
             f"({len(support)} incident{'s' if len(support) != 1 else ''} à l'appui"
             f"{': ' + ', '.join(support) if support else ''})*  \n"
             f"   Modes de défaillance : {', '.join(hypothesis['failure_modes'])}.  \n"
@@ -2416,16 +2419,31 @@ def section_recommendations(ctx: SectionContext) -> str:
         else "Commence par les modes de défaillance de priorité P2."
     )
     hypotheses = ctx.answers.get("root_causes", {}).get("hypotheses", [])
+    # H1, H2… as numbered in the root-cause section
+    hypothesis_modes = {
+        f"H{i}": set(h["failure_modes"]) for i, h in enumerate(hypotheses, 1)
+    }
 
     def check(answer: dict) -> list[str]:
+        problems = []
         missing = sorted(
             set(p1) - {a["target_failure_mode"] for a in answer["actions"]}
         )
-        return (
-            [f"pas d'action pour le(s) mode(s) de défaillance P1 : {'; '.join(missing)}"]
-            if missing
-            else []
-        )
+        if missing:
+            problems.append(
+                f"pas d'action pour le(s) mode(s) de défaillance P1 : {'; '.join(missing)}"
+            )
+        for action in answer["actions"]:
+            if action["target_failure_mode"] not in hypothesis_modes.get(
+                action["root_cause"], set()
+            ):
+                problems.append(
+                    f"l'action « {action['action'][:60]} » cible "
+                    f"{action['target_failure_mode']}, que l'hypothèse "
+                    f"{action['root_cause']} n'explique pas : choisis une hypothèse "
+                    "qui couvre ce mode de défaillance"
+                )
+        return problems
 
     answer = ctx.ask(
         "recommendations",
@@ -2433,15 +2451,20 @@ def section_recommendations(ctx: SectionContext) -> str:
         role="un planificateur de maintenance O&M pour des centrales PV de taille industrielle.",
         questions=[
             (
-                "Propose 4 à 7 actions concrètes pour l'équipe de maintenance, chacune adressant un mode "
-                "de défaillance de cet équipement (thermographie, tracé de courbe IV, tests de résistance "
-                "d'isolement, vérification du couple des connecteurs, inspection des protections contre les "
-                "surtensions, planning de nettoyage, inspection du risque d'incendie, pièces de rechange…)."
+                "Propose 4 à 7 actions concrètes pour l'équipe de maintenance. Chaque action "
+                "découle d'une hypothèse de cause racine fournie (H1, H2…) et adresse un mode "
+                "de défaillance que cette hypothèse explique."
             ),
             coverage,
             (
-                "Utilise les hypothèses de causes racines pour choisir les actions. Pour chaque action, "
-                "indique l'impact attendu qualitativement, en ne citant que des chiffres de l'entrée."
+                "Chaque action doit viser le mécanisme décrit par son hypothèse sur cet "
+                "équipement : précise quoi vérifier ou modifier, où, et pourquoi. Évite les "
+                "actions génériques qui s'appliqueraient à n'importe quel équipement, et ne "
+                "propose pas la même action pour des modes de défaillance différents."
+            ),
+            (
+                "Pour chaque action, indique l'impact attendu qualitativement, en ne citant "
+                "que des chiffres de l'entrée."
             ),
         ],
         data={
@@ -2462,8 +2485,14 @@ def section_recommendations(ctx: SectionContext) -> str:
                 for mode in modes
             ],
             "root_cause_hypotheses": [
-                {"hypothesis": h["hypothesis"], "failure_modes": h["failure_modes"]}
-                for h in hypotheses
+                {
+                    "id": f"H{i}",
+                    "hypothesis": h["hypothesis"],
+                    "failure_modes": h["failure_modes"],
+                    "supporting_incidents": h["supporting_incidents"],
+                    "reasoning": h["reasoning"],
+                }
+                for i, h in enumerate(hypotheses, 1)
             ],
         },
         schema=_object(
@@ -2483,6 +2512,10 @@ def section_recommendations(ctx: SectionContext) -> str:
                                     "pièces de rechange",
                                 ],
                                 "Type d'action.",
+                            ),
+                            "root_cause": _choice(
+                                list(hypothesis_modes) or ["H1"],
+                                "Hypothèse de cause racine (H1, H2…) dont découle l'action.",
                             ),
                             "target_failure_mode": _choice(
                                 names, "Mode de défaillance adressé (définit la priorité)."
@@ -2512,6 +2545,7 @@ def section_recommendations(ctx: SectionContext) -> str:
             "action": "Action",
             "type": "Type",
             "target_failure_mode": "Mode de défaillance adressé",
+            "root_cause": "Cause visée",
             "expected_impact": "Impact attendu",
         },
     )
