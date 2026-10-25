@@ -59,6 +59,7 @@ from datachallengecapgemini.equipment_stats import (
     RECURRENCE_DAYS,
     SAMPLE_THRESHOLD,
     SEQUENCE_DAYS,
+    compute_criticality,
     format_eur,
 )
 
@@ -766,7 +767,7 @@ class ReportFactory:
         top_n_per_site: int = 3,
         force: bool = False,
     ) -> str:
-        """Run ``dc equipment`` for the top-N most costly equipment per site.
+        """Run ``dc equipment`` for the top-N most critical equipment per site.
 
         Launches ``uv run dc equipment --site <SITE> --equipment <EQ1> ...``
         as a subprocess for each site, then reads the generated report sections
@@ -782,27 +783,25 @@ class ReportFactory:
         equipment_reports_dir = PROJECT_ROOT / "equipment_reports"
         solar_csv = PROJECT_ROOT / "data" / "incidents_clusterised_solar.csv"
 
-        # Group by site, find top N equipment per site
+        # Group by site, find the top N critical equipment per site: the
+        # equipment criticality score of ``dc equipment`` (incidents, severe
+        # incidents, cost and downtime vs the site and the fleet), P1 first,
+        # then by score within the site; sites without critical equipment
+        # are skipped
+        criticality = compute_criticality(self.df)
+        critical = criticality[criticality["is_critical"]].sort_values(
+            ["equipment_priority", "score_site"], ascending=[True, False]
+        )
         site_equipment: dict[Hashable, _SiteEquipment] = {}
-        for site, site_df in self.df.groupby("site"):
-            equip_cost = (
-                site_df.groupby("equipment_id")
-                .agg(
-                    total_cost_eur=("estimated_cost_eur", "sum"),
-                    n_incidents=("equipment_id", "size"),
-                    n_severe=("severity", lambda s: int((s == "sévère").sum())),
-                )
-                .sort_values("total_cost_eur", ascending=False)
-                .head(top_n_per_site)
-                .reset_index()
-            )
+        for site, site_critical in critical.groupby("site"):
+            equip_cost = site_critical.head(top_n_per_site)
             site_code = str(equip_cost["equipment_id"].iloc[0]).split("-")[0]
             equipment_list: list[_EquipmentCost] = []
             for _, row in equip_cost.iterrows():
                 equipment_list.append(
                     {
                         "equipment_id": str(row["equipment_id"]),
-                        "total_cost_eur": float(row["total_cost_eur"]),
+                        "total_cost_eur": float(row["total_cost"]),
                         "n_incidents": int(row["n_incidents"]),
                         "n_severe": int(row["n_severe"]),
                     }
