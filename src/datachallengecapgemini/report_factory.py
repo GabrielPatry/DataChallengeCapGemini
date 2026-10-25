@@ -55,6 +55,7 @@ from langchain_openai import AzureChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
 from datachallengecapgemini.equipment_stats import (
+    ASSET_PROFILES,
     PRIORITY_RULES,
     RECURRENCE_DAYS,
     SAMPLE_THRESHOLD,
@@ -1474,7 +1475,8 @@ CONFIDENCE_HIGH_MIN_INCIDENTS = 5
 USD_PER_M_INPUT_TOKENS = 0.10
 USD_PER_M_OUTPUT_TOKENS = 0.40
 
-SHARED_RULES = """You write one section of an equipment-level incident report for asset managers and maintenance planners of utility-scale photovoltaic plants. The equipment is a PV inverter and the DC field upstream of it.
+# {asset_context} is replaced by the "shared_context" of the asset profile
+SHARED_RULES = """You write one section of an equipment-level incident report for asset managers and maintenance planners of {asset_context}
 
 Write every generated text field in French; the prompts may remain in English.
 
@@ -1736,6 +1738,11 @@ class SectionContext:
         return self.stats["equipment"]["site"]
 
     @property
+    def profile(self) -> dict[str, str]:
+        """Asset profile (solar or wind) of the equipment, see ``ASSET_PROFILES``."""
+        return ASSET_PROFILES[self.stats["equipment"].get("asset", "solar")]
+
+    @property
     def facts(self) -> dict[str, list[str]]:
         return self.stats["facts"]
 
@@ -1780,7 +1787,10 @@ class SectionContext:
                 )
             return problems
 
-        system_prompt = f"You are {role}\n\n{SHARED_RULES}"
+        shared_rules = SHARED_RULES.replace(
+            "{asset_context}", self.profile["shared_context"]
+        )
+        system_prompt = f"You are {role}\n\n{shared_rules}"
         user_prompt = SECTION_PROMPT_TEMPLATE.format(
             title=title,
             equipment_id=self.equipment_id,
@@ -1868,7 +1878,7 @@ def section_key_figures(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "key_figures",
         "1. Chiffres clés",
-        role="un analyste de performance des actifs qui compare les onduleurs PV aux autres onduleurs de leur site.",
+        role=f"un analyste de performance des actifs qui compare les {ctx.profile['equipment_plural']} aux autres {ctx.profile['equipment_plural']} de leur site.",
         questions=[
             (
                 "Sur quels indicateurs cet équipement se distingue-t-il de l'équipement médian de son "
@@ -2001,7 +2011,7 @@ def section_methodology(ctx: SectionContext) -> str:
             "100 qui combine quatre indicateurs : nombre d'incidents, nombre d'incidents sévères "
             "(comptés double), coût total de réparation et temps d'arrêt total. Le score est calculé "
             "deux fois : par rapport aux autres équipements du même site et par rapport à tous les "
-            "équipements solaires du parc. 50 correspond à un équipement typique, 75 ou plus à un "
+            f"équipements du {ctx.profile['fleet']}. 50 correspond à un équipement typique, 75 ou plus à un "
             "équipement clairement au-dessus des autres. Un équipement atteignant 75 ou plus sur les "
             "deux comparaisons est prioritaire **P1**, sur l'une d'elles prioritaire **P2**. Ici : "
             f"{equipment['why_selected']} → {outcome}."
@@ -2033,7 +2043,7 @@ def section_cost_timeline(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "cost_timeline",
         "3. Chronologie des coûts",
-        role="un ingénieur fiabilité qui analyse l'historique des coûts et la récurrence des incidents sur des onduleurs PV.",
+        role=f"un ingénieur fiabilité qui analyse l'historique des coûts et la récurrence des incidents sur des {ctx.profile['equipment_plural']}.",
         questions=[
             (
                 "Comment le nombre d'incidents et leur coût ont-ils évolué année par année ? Commente "
@@ -2114,7 +2124,7 @@ def section_weather(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "weather",
         "4. Exposition météorologique",
-        role="un ingénieur spécialisé dans l'exposition météorologique et environnementale des centrales PV.",
+        role=f"un ingénieur spécialisé dans l'exposition météorologique et environnementale des {ctx.profile['plants']}.",
         questions=[
             (
                 "Sous quelles conditions météorologiques cet équipement perd-il le plus d'heures ? Ces "
@@ -2202,12 +2212,12 @@ def section_failure_modes(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "failure_modes",
         "5. Modes de défaillance",
-        role="un expert en analyse de défaillances PV (onduleurs, câblage CC, boîtes de jonction, modules, risque d'incendie).",
+        role=f"un expert en analyse de {ctx.profile['failure_expertise']}.",
         questions=[
             "Pour chaque mode de défaillance, dans cet ordre : "
             + "; ".join(f'"{n}"' for n in names)
             + ", donne "
-            "(a) son mécanisme physique probable sur un onduleur PV et son champ CC, et "
+            f"(a) son mécanisme physique probable sur {ctx.profile['mechanism_scope']}, et "
             "(b) les preuves sur cet équipement — incidents (uniquement ceux de ce mode de "
             "défaillance), dates, sévérité, coût, récurrences — et son impact.",
         ],
@@ -2297,7 +2307,7 @@ def section_root_causes(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "root_causes",
         "6. Hypothèses de causes racines",
-        role="un ingénieur en analyse de causes racines (RCA) pour les centrales PV.",
+        role=f"un ingénieur en analyse de causes racines (RCA) pour les {ctx.profile['plants']}.",
         questions=[
             (
                 "Propose 3 à 5 hypothèses de causes racines expliquant les incidents de cet équipement. "
@@ -2430,7 +2440,7 @@ def section_recommendations(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "recommendations",
         "7. Recommandations",
-        role="un planificateur de maintenance O&M pour des centrales PV de taille industrielle.",
+        role=f"un planificateur de maintenance O&M pour des {ctx.profile['plants']} de taille industrielle.",
         questions=[
             (
                 "Propose 4 à 7 actions concrètes pour l'équipe de maintenance. Chaque action "
@@ -2582,7 +2592,7 @@ def section_summary(ctx: SectionContext) -> str:
     answer = ctx.ask(
         "summary",
         "Titre et résumé exécutif",
-        role="un rédacteur de résumés exécutifs pour les gestionnaires d'actifs de centrales PV.",
+        role=f"un rédacteur de résumés exécutifs pour les gestionnaires d'actifs de {ctx.profile['plants']}.",
         questions=[
             "Donne au rapport un titre court nommant l'identifiant de l'équipement et ses principaux modes de défaillance.",
             (
@@ -2616,7 +2626,7 @@ def section_summary(ctx: SectionContext) -> str:
         [
             f"# {title}",
             (
-                f"**Équipement :** {ctx.equipment_id} · **Site :** {ctx.site} · **Type d'actif :** Onduleur PV · "
+                f"**Équipement :** {ctx.equipment_id} · **Site :** {ctx.site} · **Type d'actif :** {ctx.profile['equipment']} · "
                 f"**Généré le :** {date.today().isoformat()}"
             ),
             f"> {answer['synopsis']}",

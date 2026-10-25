@@ -1,4 +1,4 @@
-"""Equipment-level statistics for the per-equipment incident reports (solar only).
+"""Equipment-level statistics for the per-equipment incident reports (solar and wind).
 
 Every number that ends up in an equipment report is computed here, in plain
 pandas, so that the LLM agents of ``report_factory`` never calculate anything:
@@ -106,8 +106,52 @@ PRIORITY_RULES: dict[str, str] = {
 }
 
 
-def load_solar_incidents(csv_path: Path) -> pd.DataFrame:
-    """Load the clusterised solar incidents CSV, with parsed dates.
+# What changes between asset types: how the equipment, the plants and the
+# fleet are named in the reports and in the agents' prompts. Statistics,
+# criticality and checks are the same for every asset type.
+ASSET_PROFILES: dict[str, dict[str, str]] = {
+    "solar": {
+        "equipment": "Onduleur PV",
+        "equipment_long": "Onduleur PV et champ CC amont",
+        "equipment_plural": "onduleurs PV",
+        "plants": "centrales PV",
+        "fleet": "parc solaire",
+        "shared_context": (
+            "utility-scale photovoltaic plants. The equipment is a PV inverter "
+            "and the DC field upstream of it."
+        ),
+        "failure_expertise": (
+            "défaillances PV (onduleurs, câblage CC, boîtes de jonction, modules, "
+            "risque d'incendie)"
+        ),
+        "mechanism_scope": "un onduleur PV et son champ CC",
+    },
+    "wind": {
+        "equipment": "Éolienne",
+        "equipment_long": (
+            "Éolienne (pales et rotor, nacelle et chaîne cinématique, armoires "
+            "électriques, mât et fondation)"
+        ),
+        "equipment_plural": "éoliennes",
+        "plants": "parcs éoliens",
+        "fleet": "parc éolien",
+        "shared_context": (
+            "utility-scale wind farms. The equipment is one wind turbine (blades "
+            "and rotor, nacelle and drivetrain, braking system, electrical "
+            "cabinets, tower and foundation)."
+        ),
+        "failure_expertise": (
+            "défaillances d'éoliennes (pales, rotor et freinage, chaîne "
+            "cinématique, armoires électriques, mât et fondations, arrêts de "
+            "sécurité par vent fort)"
+        ),
+        "mechanism_scope": "une éolienne",
+    },
+}
+
+
+def load_incidents(csv_path: Path) -> pd.DataFrame:
+    """Load a clusterised incidents CSV (solar or wind), with parsed dates.
 
     Noise-cluster incidents and incidents without a cluster are relabelled
     ``UNCLASSIFIED``.
@@ -119,6 +163,10 @@ def load_solar_incidents(csv_path: Path) -> pd.DataFrame:
         noise |= df["cluster_code"] == NOISE_CLUSTER_CODE
     df.loc[noise, "cluster_name"] = UNCLASSIFIED
     return df.sort_values(["site", "equipment_id", "date"]).reset_index(drop=True)
+
+
+# Former name, kept for existing callers
+load_solar_incidents = load_incidents
 
 
 def site_code(equipment_id: str) -> str:
@@ -509,7 +557,10 @@ def _failure_modes(d: pd.DataFrame, focus_site: pd.DataFrame) -> list[dict]:
 
 
 def build_equipment_stats(
-    df: pd.DataFrame, criticality: pd.DataFrame, equipment_id: str
+    df: pd.DataFrame,
+    criticality: pd.DataFrame,
+    equipment_id: str,
+    asset: str = "solar",
 ) -> dict:
     """Every statistic block of the report of *equipment_id* (JSON-serialisable).
 
@@ -538,12 +589,14 @@ def build_equipment_stats(
     priority = str(row["equipment_priority"])
     why = (
         f"score de criticité {versus(row['score_site'])} par rapport aux autres équipements "
-        f"du site et {versus(row['score_fleet'])} par rapport à l'ensemble du parc solaire"
+        f"du site et {versus(row['score_fleet'])} par rapport à l'ensemble du "
+        f"{ASSET_PROFILES[asset]['fleet']}"
     )
     equipment = {
         "equipment_id": equipment_id,
         "site": site,
-        "asset_type": "Onduleur PV et champ CC amont",
+        "asset": asset,
+        "asset_type": ASSET_PROFILES[asset]["equipment_long"],
         "equipment_priority": priority if priority != "-" else "non critique",
         "risk_level": str(row["risk_level"]),
         "criticality_score_within_site": _round(row["score_site"]),

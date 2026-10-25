@@ -222,7 +222,7 @@ skip it with `--skip-pdf`.
 uv run dc preprocess
 ```
 
-### Equipment-level reports (solar)
+### Equipment-level reports (solar and wind)
 
 One report per critical equipment of a site, written section by section by
 specialised Azure OpenAI agents:
@@ -231,7 +231,13 @@ specialised Azure OpenAI agents:
 uv run dc equipment --site OUEST1             # critical equipment of the site
 uv run dc equipment --site OUEST1 --dry-run   # figures, JSON and prompts, no Azure call
 uv run dc equipment --site OUEST1 --equipment OUEST1-INV10 --force root_causes
+uv run dc equipment --asset wind --site SUD1   # wind turbines (data/incidents_clusterised_wind.csv)
 ```
+
+`--asset` (`solar` by default, or `wind`) selects the clusterised CSV
+(`--solar-csv` / `--wind-csv`), the failure-mode families of the figures and
+the asset profile used in the agents' prompts (`ASSET_PROFILES` in
+`equipment_stats.py`).
 
 1. **Selection** (`equipment_stats.py`): every equipment gets a 0-100
    criticality score (incidents, severe incidents ×2, cost, downtime) against

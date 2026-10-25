@@ -41,7 +41,7 @@ def main() -> None:
     - ``dc`` (no subcommand) — main pipeline: clustering (skipped by default,
       use ``--all`` to recompute) → plotting → reporting → PDF export.
     - ``dc preprocess`` — OCR scanned PDFs and parse them into a merged CSV.
-    - ``dc equipment`` — per-equipment incident reports (solar).
+    - ``dc equipment`` — per-equipment incident reports (solar or wind, ``--asset``).
     """
     from datachallengecapgemini.clustering import add_clustering_arguments
     from datachallengecapgemini.pdf_export import add_pdf_arguments
@@ -85,8 +85,8 @@ def main() -> None:
     # --- dc equipment ---
     equipment_parser = subparsers.add_parser(
         "equipment",
-        help="Per-equipment incident reports (solar), one Azure OpenAI agent per section.",
-        description="Per-equipment incident reports (solar), one Azure OpenAI agent per section.",
+        help="Per-equipment incident reports (solar or wind, --asset), one Azure OpenAI agent per section.",
+        description="Per-equipment incident reports (solar or wind, --asset), one Azure OpenAI agent per section.",
     )
     equipment_parser.add_argument(
         "--site", required=True, help="Site code (e.g. OUEST1) or full site name."
@@ -206,14 +206,15 @@ def _run_equipment(args: argparse.Namespace) -> None:
     from datachallengecapgemini.equipment_stats import (
         compute_criticality,
         has_failure_modes,
-        load_solar_incidents,
+        load_incidents,
         select_equipment,
         site_code,
     )
     from datachallengecapgemini.plot_factory import run_equipment_plotting
     from datachallengecapgemini.report_factory import run_equipment_reporting
 
-    df = load_solar_incidents(args.solar_csv)
+    csv_path = args.wind_csv if args.asset == "wind" else args.solar_csv
+    df = load_incidents(csv_path)
     criticality = compute_criticality(df)
     equipment_ids = select_equipment(
         criticality, args.site, args.equipment, args.all_equipment
@@ -239,7 +240,7 @@ def _run_equipment(args: argparse.Namespace) -> None:
     print("=" * 60)
     print("Plotting: figures and JSON per equipment")
     print("=" * 60)
-    run_equipment_plotting(df, criticality, equipment_ids, site_dir)
+    run_equipment_plotting(df, criticality, equipment_ids, site_dir, args.asset)
 
     print()
     print("=" * 60)

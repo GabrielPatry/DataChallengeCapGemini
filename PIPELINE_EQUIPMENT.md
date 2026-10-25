@@ -382,14 +382,16 @@ Natural chaining: the site report can receive, as data for one section, the
 summaries already generated for its critical equipment
 (`sections/summary.llm.json` of each equipment), without recomputing anything.
 
-### Example B — wind
+### Example B — wind (implemented)
 
-Requires a clusterised wind CSV first (only solar is clusterised today). What
-changes: the agents' role (wind turbine instead of PV inverter),
-`FAILURE_MODE_FAMILIES` (colours/shapes of the wind failure modes), the order
-of the weather conditions and the example actions in the recommendation
-questions (blade inspection, gearbox, vibration monitoring…). Statistics,
-checks and assembly do not change.
+`uv run dc equipment --asset wind --site SUD1` runs the same pipeline on the
+wind turbines of `data/incidents_clusterised_wind.csv`. Only two things depend
+on the asset type: the asset profile (`ASSET_PROFILES` in `equipment_stats.py`:
+how the equipment, plants and fleet are named in the reports and in the
+agents' roles and shared rules) and the failure-mode families of the figures
+(`FAILURE_MODE_FAMILIES["wind"]` in `plot_factory.py`: blades, mechanical /
+drivetrain, electrical, overheating, high-wind safety stops, structure /
+foundation). Statistics, criticality, checks and assembly are unchanged.
 
 ### Example C — fleet, technology or technician
 
