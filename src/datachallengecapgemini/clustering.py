@@ -1,4 +1,18 @@
-"""Exécution non interactive du pipeline de clustering des incidents."""
+"""Clustering pipeline — BERTopic topic modeling of the incident reports.
+
+Non-interactive execution extracted from the notebook: the incident texts are
+embedded with Azure OpenAI, several ``min_cluster_size`` values are swept,
+the chat model picks the best one, the clusters are named, and one
+clusterised CSV per asset type is written (with the ``topic``,
+``cluster_name`` and ``cluster_code`` columns).
+
+The step is importable (:func:`run_clustering_pipeline` for a single asset
+type, :func:`run_clustering` for solar and wind) and is part of the main
+pipeline (``uv run dc --all``). It is also available as a standalone CLI
+command:
+
+- ``uv run python -m datachallengecapgemini.clustering`` — cluster one asset type
+"""
 
 from __future__ import annotations
 
@@ -7,6 +21,8 @@ import json
 import os
 import re
 import time
+import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -19,6 +35,9 @@ from openai import AzureOpenAI, RateLimitError
 from sklearn.feature_extraction.text import CountVectorizer
 from umap import UMAP
 
+# Project root: src/datachallengecapgemini/clustering.py -> 3 levels up
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
 FRENCH_STOPWORDS = [
     "le", "la", "les", "un", "une", "des", "de", "du", "et", "en",
     "sur", "au", "aux", "pour", "par", "est", "sont", "a", "été",
@@ -26,9 +45,21 @@ FRENCH_STOPWORDS = [
     "afin", "plus", "après", "avant",
 ]
 REQUIRED_COLUMNS = {"asset_type", "text"}
+# Libellés bruts des PDF -> type d'actif, en minuscules et sans accents (un CSV
+# fusionné avant la correction de merge_csv peut encore les contenir)
+ASSET_TYPE_ALIASES = {"centrale photovoltaique": "solar", "parc eolien": "wind"}
 CHAT_INPUT_PRICE_USD_PER_MILLION = 0.10
 CHAT_CACHED_INPUT_PRICE_USD_PER_MILLION = 0.025
 CHAT_OUTPUT_PRICE_USD_PER_MILLION = 0.40
+
+
+def _normalise_asset_type(value: Any) -> Any:
+    """Ramène un libellé brut de type d'actif à ``solar`` / ``wind``."""
+    if not isinstance(value, str):
+        return value
+    decomposed = unicodedata.normalize("NFKD", value.strip().lower())
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return ASSET_TYPE_ALIASES.get(plain, value)
 
 
 def _load_incidents(csv_path: Path) -> pd.DataFrame:
@@ -44,6 +75,9 @@ def _load_incidents(csv_path: Path) -> pd.DataFrame:
             f"{sorted(REQUIRED_COLUMNS)}. Colonnes manquantes : "
             f"{sorted(missing_columns)}."
         )
+
+    # "Centrale photovoltaïque", "Centrale photovoltaique"… -> "solar"
+    incidents["asset_type"] = incidents["asset_type"].map(_normalise_asset_type)
 
     # Comme dans le notebook, seules les lignes avec un texte extrait sont gardées.
     incidents = incidents[incidents["text"].notnull()].reset_index(drop=True)
@@ -625,8 +659,9 @@ def run_clustering_pipeline(
     min_cluster_size_start: int = 8,
     max_cluster_size_fraction: float = 0.12,
     min_cluster_size_step: int = 3,
+    output_path: str | Path | None = None,
 ) -> Path:
-    """Clusterise le type d'actif demandé et écrit un fichier suffixé `_merge`.
+    """Clusterise le type d'actif demandé et écrit le CSV clusterisé.
 
     Le CSV peut contenir les deux types d'actifs : seules les lignes de
     `asset_type` sont traitées et écrites dans le résultat. Les lignes sans
@@ -634,6 +669,9 @@ def run_clustering_pipeline(
     Les variables Azure sont lues depuis l'environnement ou le fichier `.env`.
     Le balayage de min_cluster_size commence à 8, progresse par pas de 3 et
     s'arrête à 12 % du nombre d'incidents (valeurs par défaut du notebook).
+    Le chemin de sortie est dérivé du CSV d'entrée
+    (``<stem>_clusterised_<asset_type>.csv``) sauf si `output_path` est
+    fourni.
     """
     if asset_type not in ("wind", "solar"):
         raise ValueError("asset_type doit être 'wind' ou 'solar'.")
@@ -701,16 +739,95 @@ def run_clustering_pipeline(
     ]
     print(f"{topic_count} clusters nommés pour {asset_type!r}.")
 
-    output_path = input_path.with_name(
-        f"{input_path.stem}_clusterised_{asset_type}.csv"
+    if output_path is None:
+        resolved_output_path = input_path.with_name(
+            f"{input_path.stem}_clusterised_{asset_type}.csv"
+        )
+    else:
+        resolved_output_path = Path(output_path).expanduser().resolve()
+    incidents.to_csv(resolved_output_path, index=False)
+    print(f"Fichier enregistré : {resolved_output_path}")
+    return resolved_output_path
+
+
+# ---------------------------------------------------------------------------
+# CLI helpers (shared with the top-level datachallengecapgemini entry point)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ClusteringArgs:
+    """Arguments for the clustering pipeline (solar and wind)."""
+
+    input_csv: Path
+    solar_output_csv: Path
+    wind_output_csv: Path
+    min_cluster_size_start: int
+    max_cluster_size_fraction: float
+    min_cluster_size_step: int
+
+
+def add_clustering_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add clustering-specific arguments to *parser*."""
+    parser.add_argument(
+        "--clustering-input-csv",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "incidents_students_merged.csv",
+        help="Path to the merged incidents CSV used as clustering input (preprocessing output).",
     )
-    incidents.to_csv(output_path, index=False)
-    print(f"Fichier enregistré : {output_path}")
-    return output_path
+    parser.add_argument(
+        "--min-cluster-size-start",
+        type=int,
+        default=8,
+        help="First min_cluster_size value tested (default: 8).",
+    )
+    parser.add_argument(
+        "--max-cluster-size-fraction",
+        type=float,
+        default=0.12,
+        help="Fraction of the incident count used as the max bound (default: 0.12).",
+    )
+    parser.add_argument(
+        "--min-cluster-size-step",
+        type=int,
+        default=3,
+        help="Step between the tested min_cluster_size values (default: 3).",
+    )
+
+
+def run_clustering(args: ClusteringArgs) -> None:
+    """Run the clustering pipeline for both asset types.
+
+    Reads the merged incidents CSV and writes one clusterised CSV per asset
+    type (``solar_output_csv`` and ``wind_output_csv``), adding the ``topic``,
+    ``cluster_name`` and ``cluster_code`` columns.
+    """
+    outputs: list[tuple[Literal["wind", "solar"], Path]] = [
+        ("solar", args.solar_output_csv),
+        ("wind", args.wind_output_csv),
+    ]
+    for asset_type, output_csv in outputs:
+        print()
+        print("=" * 60)
+        print(f"Clustering: {asset_type} incidents from {args.input_csv}")
+        print("=" * 60)
+        run_clustering_pipeline(
+            args.input_csv,
+            asset_type,
+            min_cluster_size_start=args.min_cluster_size_start,
+            max_cluster_size_fraction=args.max_cluster_size_fraction,
+            min_cluster_size_step=args.min_cluster_size_step,
+            output_path=output_csv,
+        )
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
 
 
 def main() -> None:
-    """Point d'entrée en ligne de commande."""
+    """CLI entry point — ``uv run python -m datachallengecapgemini.clustering``."""
     parser = argparse.ArgumentParser(
         description="Lance le clustering sur un CSV d'incidents."
     )
@@ -719,6 +836,12 @@ def main() -> None:
         "asset_type",
         choices=("wind", "solar"),
         help="Type d'actif à clusteriser.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Chemin du CSV de sortie (défaut : <stem>_clusterised_<asset_type>.csv à côté de l'entrée).",
     )
     parser.add_argument(
         "--min-cluster-size-start",
@@ -745,6 +868,7 @@ def main() -> None:
         min_cluster_size_start=args.min_cluster_size_start,
         max_cluster_size_fraction=args.max_cluster_size_fraction,
         min_cluster_size_step=args.min_cluster_size_step,
+        output_path=args.output,
     )
 
 

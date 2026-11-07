@@ -1,7 +1,7 @@
 [project]
 name = "datachallengecapgemini"
 version = "0.1.0"
-description = "Add your description here"
+description = "Notre réponse au datachallenge capgemini"
 readme = "README.md"
 authors = [
     { name = "gabriel", email = "144031387+GabrielPatry@users.noreply.github.com" }
@@ -28,8 +28,6 @@ dependencies = [
 
 [project.scripts]
 dc = "datachallengecapgemini:main"
-datachallengecapgemini = "datachallengecapgemini:main"
-datachallengecapgemini-preprocess = "datachallengecapgemini.preprocessing:main"
 
 [build-system]
 requires = ["uv_build>=0.12.11,<0.13.0"]

@@ -28,3 +28,18 @@ filled_templates/
 .vibe
 
 
+# --- Equipment analysis ---
+# Local files kept out of the repo
+.DS_Store
+.ipynb_checkpoints/
+*.ipynb
+/*.pdf
+/solar_report.md
+/requirements.txt
+/*.csv
+
+# Generated equipment reports (uv run dc-equipment)
+equipment_reports/
+
+# First prototype of the equipment analysis, replaced by src/ (local only)
+site_analysis/
