@@ -1,4 +1,4 @@
-"""Agent 4 — Stats : calculs 100 % déterministes (aucun LLM).
+"""Stats : calculs 100 % déterministes (aucun LLM).
 
 Entrée  : DataFrame clusterisé (colonnes de incidents_clusterised_*.csv)
 Sortie  : ``compute_stats_and_graphs`` renvoie les statistiques JSON et les figures

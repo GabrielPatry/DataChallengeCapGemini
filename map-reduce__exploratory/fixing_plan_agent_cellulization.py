@@ -212,7 +212,9 @@ def build_fixing_plan(incidents: pd.DataFrame) -> pd.DataFrame:
         ["part_cout_cumulee", "selection_pareto"]
     ]
     cells = cells.join(pareto_selection, on=list(CELL_KEYS))
-    cells["selection_securite"] = cells["n_incidents_a_risque"].gt(0)
+    # Ne retenir pour sécurité que les cellules ayant au moins 2 incidents afin d'éviter le bruit
+    # des incidents isolés uniques (ex. incident 703 avec n=1).
+    cells["selection_securite"] = cells["n_incidents_a_risque"].gt(0) & cells["n_incidents"].ge(2)
     cells["motif_selection"] = np.select(
         [
             cells["selection_pareto"] & cells["selection_securite"],
