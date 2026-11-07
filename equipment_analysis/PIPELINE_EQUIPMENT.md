@@ -1,10 +1,10 @@
 # Equipment-level report pipeline
 
-*Branch `juan/equipment-analysis` — Data Challenge Capgemini x Mines Paris 2026, PV incidents.*
+Data Challenge Capgemini x Mines Paris 2026, PV incidents.
 
 A runnable walkthrough of everything below is in
-[`notebooks/equipment_pipeline_walkthrough.py`](notebooks/equipment_pipeline_walkthrough.py)
-(marimo: `uv run marimo edit notebooks/equipment_pipeline_walkthrough.py`).
+[`equipment_pipeline_walkthrough.py`](equipment_pipeline_walkthrough.py)
+(marimo: `uv run marimo edit equipment_analysis/equipment_pipeline_walkthrough.py`).
 
 ## Contents
 
@@ -18,7 +18,7 @@ A runnable walkthrough of everything below is in
    - 3.5 Report assembly (`templates/equipment/equipment_report.md`)
 4. [Full example: OUEST1-INV10](#4-full-example-ouest1-inv10)
 5. [Transposing the pipeline to other scenarios](#5-transposing-the-pipeline-to-other-scenarios)
-6. [Repository layout on this branch](#6-repository-layout-on-this-branch)
+6. [Repository layout](#6-repository-layout)
 7. [Useful commands](#7-useful-commands)
 
 ---
@@ -403,59 +403,37 @@ careful with the reading: it measures workload, not blame).
 > come from Python (stats or figure JSON). If the agent needs a comparison, give
 > it already computed, ideally as a sentence in `facts`.
 
-## 6. Repository layout on this branch
-
-Legend: **[EQUIPMENT]** equipment-level pipeline (this branch) · **[FLEET]**
-teammates' fleet pipeline (main) · **[LOCAL]** not versioned (`.gitignore`):
-data, credentials and generated files.
+## 6. Repository layout
 
 ```
 DataChallengeCapGemini/
 |
-|-- README.md                    [FLEET+EQUIPMENT] setup and usage;
-|                                "Equipment-level reports" section added
-|-- PIPELINE_EQUIPMENT.md        [EQUIPMENT] this document
+|-- README.md                    project overview and setup
 |-- pyproject.toml / uv.lock     dependencies (uv); command `dc`
-|   .python-version              (with `preprocess` and `equipment` subcommands)
+|-- .python-version              Python version pin
 |-- .env.example                 Azure credentials template
-|-- .env                         [LOCAL] real credentials, NEVER commit
+|-- equipment_analysis/          this documentation and its walkthrough
+|-- functional_pipeline_test/    functional clustering and statistics pipeline
+|-- map-reduce__exploratory/      recommendation workflow and site statistics
+|-- topic_modeling/              BERTopic notebook and noise exploration
+|-- tests/                        automated tests
 |-- .gitignore
 |
-|-- src/datachallengecapgemini/  PYTHON PACKAGE (the "official" code)
-|   |-- __init__.py              main() = uv run dc               [FLEET]
-|   |                            _run_equipment() = dc equipment  [EQUIPMENT]
-|   |-- preprocessing.py         OCR + PDF parsing                [FLEET]
-|   |-- equipment_stats.py       criticality, #k numbering,       [EQUIPMENT]
-|   |                            statistics and facts
-|   |-- plot_factory.py          PlotFactory (fleet)              [FLEET]
-|   |                            EquipmentPlotFactory             [EQUIPMENT]
-|   |-- report_factory.py        run_reporting (fleet)            [FLEET]
-|   |                            Azure client, SectionContext,    [EQUIPMENT]
-|   |                            section_*, run_equipment_reporting
-|   `-- pdf_export.py            markdown -> PDF with pandoc      [FLEET]
+|-- src/datachallengecapgemini/  Python package and `dc` CLI
 |
 |-- templates/
-|   |-- solar_report.md          solar fleet template             [FLEET]
-|   |-- wind_report.md           wind fleet template              [FLEET]
-|   `-- equipment/
-|       `-- equipment_report.md  equipment template               [EQUIPMENT]
+|   |-- solar_report.md
+|   |-- wind_report.md
+|   `-- equipment/equipment_report.md
 |
-|-- notebooks/                   marimo notebooks (.py)
-|   |-- equipment_pipeline_walkthrough.py   runnable walkthrough  [EQUIPMENT]
-|   `-- starterkit_students, clustering_pipeline, PerSiteAnalysis,
-|       unclustered_exploration, view_csv_data                    [FLEET]
-|-- functional_pipeline_test/    teammates' pipeline experiments
-|
-|-- data/                        [LOCAL] incident CSVs (incl. the clusterised
-|                                ones read by `dc equipment`), PDFs, data/plots
-|-- filled_templates/            [LOCAL] generated fleet reports
-`-- equipment_reports/           [LOCAL] generated equipment reports:
-    `-- <SITE>/criticality.csv, <SITE>/<EQUIPMENT>/{report.md, figures/,
-        json/, sections/}
+|-- data/                        local inputs and generated outputs (not tracked)
+|-- filled_templates/            generated fleet reports (not tracked)
+`-- equipment_reports/           generated equipment reports (not tracked)
 ```
 
-Every Python file used by the pipelines lives in `src/datachallengecapgemini/`;
-no data and no generated file is versioned.
+The fleet/equipment CLI implementation lives in `src/datachallengecapgemini/`.
+The topic-modeling and map-reduce directories contain separate experiments.
+Local data, credentials and generated outputs are excluded from Git.
 
 ## 7. Useful commands
 
@@ -472,4 +450,4 @@ no data and no generated file is versioned.
 
 Requirement: `.env` with `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`,
 `AZURE_OPENAI_API_VERSION` and `AZURE_OPENAI_CHAT_DEPLOYMENT` (see
-`.env.example`).
+`../.env.example`).

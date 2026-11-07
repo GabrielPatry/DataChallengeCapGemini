@@ -21,8 +21,8 @@ def _(mo):
     The written documentation is in `PIPELINE_EQUIPMENT.md`.
 
     **Requirements:** `uv sync`, the clusterised solar CSV in `data/incidents_clusterised_solar.csv`
-    (written by the clustering step of `uv run dc`), then `uv run marimo edit notebooks/equipment_pipeline_walkthrough.py`.
-    Azure calls need the `.env` file (see `.env.example`); without it, the agents run in *dry-run* mode
+    (written by `uv run dc --all`), then `uv run marimo edit equipment_analysis/equipment_pipeline_walkthrough.py`.
+    Azure calls need the `.env` file (see `../.env.example`); without it, the agents run in *dry-run* mode
     (prompts are written, text fields are placeholders).
     """)
     return

@@ -1,34 +1,120 @@
 # DataChallengeCapGemini
 
-Starter kit for the **Cap-Gemini DataChallenge for Mines Paris 2026** — incident analysis for PV (solar) and wind assets.
+Project for the **Capgemini Data Challenge at Mines Paris 2026**: turning incident reports for photovoltaic (solar) and wind assets into structured analysis and maintenance recommendations.
 
-The goal is to build an agentic pipeline that, starting from incident reports in
-`data/incidents_students.csv` and pdf reports in `data/pdf_scan` and `data/pdf_digital`, performs:
+## Problem
 
-- **Topic modeling** (grouping incidents by theme),
-- **Root-cause analysis**,
-- **Global statistics** (by site, severity, seasonality, downtime, cost, etc.),
-- **Remediation proposals** (maintenance actions, technical improvements).
+Incident information is distributed across a CSV and PDF reports. The challenge was to extract and organize that information, identify recurring failure themes and likely causes, compare incidents across sites, and turn the findings into practical remediation actions.
 
-The first building block — topic modeling — was already provided as a notebook, that was converted by us as a [marimo](https://marimo.io) notebook.
+The analysis targets **topic modeling**, **root-cause analysis**, **site and asset statistics** (including severity, downtime and cost), and **prioritized maintenance recommendations**.
+
+## Project presentation
+
+See the [presentation delivered at the university](Presentation.pptx).
+
+## Main workflows and related components
+
+The repository contains two main analysis workflows, as well as related notebooks. The directories separate experiments and responsibilities.
+We implemented a fully functional pipeline generating a PDF report, and explored another approach based on map reduce.
+
+Since this was short-term academic work, we did not consolidate these flows into a single, unified pipeline.
+
+### 1. Functional pipeline test — clustering and statistical reporting
+
+It embeds incident text, tests BERTopic clustering configurations, compares candidate topics, uses Azure OpenAI with Langgraph to review possible cluster fusions, and generates statistical reports.
+
+```mermaid
+flowchart LR
+    A[Incident reports<br/>CSV and text] --> B[Embeddings]
+    B --> C[Topic modeling<br/>and clustering]
+    C --> D[Candidate cluster analysis]
+    D --> E[Azure-assisted<br/>fusion validation]
+    E --> F[Statistics and reports<br/>by asset type]
+```
+
+The functional pipeline and reporting documentation are in [`functional_pipeline_test/`](functional_pipeline_test/) and [`functional_pipeline_test/REPORTING.md`](functional_pipeline_test/REPORTING.md). When generated, statistical reports for solar and wind are written to `functional_pipeline_test/reports/solar/` and `functional_pipeline_test/reports/wind/`. They include plots, statistical tests and a PDF report.
+
+### 2. Map-reduce exploratory approach — recommendations
+
+This solar-focused workflow first uses an LLM to extract structured evidence and failure information from each clustered incident. It then groups incidents into cells keyed by **site, topic cluster, and trigger**, computes cell-level statistics and priorities, and proposes evidence-backed remediation actions. Recommendations are adapted to measured site profiles, given hypothetical impact estimates, and assembled into a final action plan and report.
+
+```mermaid
+flowchart LR
+    A[Clustered solar incidents] --> B[Map: structured extraction<br/>per incident]
+    B --> C[Reduce: group by site,<br/>topic cluster and trigger]
+    C --> D[Cell statistics<br/>and prioritization]
+    C --> E[Site profile indicators]
+    D --> F[Evidence-backed actions<br/>from action library]
+    E --> G[Adapt actions<br/>to site context]
+    F --> G
+    G --> H[Hypothetical impact<br/>estimates]
+    H --> I[Final action plan<br/>and Markdown report]
+```
+
+The map-reduce recommendation scripts are in [`map-reduce__exploratory/`](map-reduce__exploratory/). The BERTopic starter notebook and its separate clustered-noise exploration are in [`topic_modeling/`](topic_modeling/); their results were then implemented into the functional_pipeline. Equipment report documentation and its walkthrough are in [`equipment_analysis/`](equipment_analysis/). The walkthrough demonstrates the `dc equipment` feature implemented in [`src/datachallengecapgemini/`](src/datachallengecapgemini/).
+
+
+
+Example solar recommendation reports in the current working copy are `final_action_report_solar.md` and `final_action_report_solar_abbreviated.md`. The map-reduce scripts' default action-plan JSON/CSV outputs are under `data/`. These are generated/local artifacts and are not guaranteed to be present in a repository clone.
+
+The dataset and generated data artifacts are not tracked by Git and are therefore not included in a repository clone.
+
+The first building block — topic modeling — was provided as a notebook and converted to a [marimo](https://marimo.io) notebook.
+
+## Technical and scientific highlights
+
+- **BERTopic for explainable incident themes.** Text embeddings capture semantic similarity; UMAP reduces their dimensionality, HDBSCAN discovers clusters (and leaves outliers as noise), and a French `CountVectorizer` extracts representative words. In the functional pipeline, we scan `min_cluster_size` values, compare how topics merge, and use Azure OpenAI to review candidate fusions rather than treating one clustering configuration as definitive. See [`functional_pipeline_test/clustering_module.py`](functional_pipeline_test/clustering_module.py) and the [topic-modeling notebook](topic_modeling/starterkit_students.py).
+- **LangGraph for equipment-report recommendations.** In the separate `dc equipment` feature, [`src/datachallengecapgemini/report_factory.py`](src/datachallengecapgemini/report_factory.py) passes a shared typed state through three sequential nodes: identify cost drivers, draft recommendations, then prioritize them. This is not part of `functional_pipeline_test`.
+- **Map-reduce with structured, traceable extraction.** In the exploratory solar workflow, an LLM extracts incident-level fields using a JSON schema, including the evidence level and a supporting quote. The quote is checked against the source report, and unknown causes are kept explicitly unknown instead of being presented as facts. Deterministic aggregation and prioritization then combine the extracted incidents into site/topic/trigger cells.
+- **Statistical safeguards.** The functional reports test topic–severity association with chi-square tests, use seeded Monte Carlo p-values for sparse tables, and apply Benjamini–Hochberg correction across asset types. The exploratory site-profile analysis uses chi-square tests and Holm correction when comparing sites. These checks help avoid over-interpreting chance differences across multiple comparisons.
+- **Decision support with explicit assumptions.** The recommendation workflow combines measured cost, downtime, severity and recurrence with Pareto-based prioritization and site indicators. Estimated action benefits are scenario-based hypotheses from the action library, not guaranteed savings; they are labeled as such and should be validated against operational outcomes.
+
+**Scientific limitation:** these analyses identify patterns and associations, not proven causes. Incident records may be incomplete or dependent, topic clusters are learned from the same data being analyzed, and some clustering choices may incorporate severity during review. Results should therefore support expert investigation, not replace it.
 
 ## Project structure
 
-to run the project, it is important to include the `.env` file and the `data` folder to the cloned repository. In the end, you should have the following structure :
+The repository is organized as follows. The incident dataset, PDFs, `.env`, and generated analysis outputs are local files and are not included in a clone.
 
 ```
-├── data/                          # Incident data (CSV + PDFs, gitignored)
-│   ├── incidents_students.csv     # Main dataset (1800 reports)
-│   ├── pdf_digital/               # Digital PDFs (extractable text)
-│   └── pdf_scan/                  # Scanned PDFs (require OCR)
-├── notebooks/
-│   └── starterkit_students.py     # marimo notebook — topic modeling pipeline
-├── src/
-│   └── datachallengecapgemini/    # Python package
-├── pyproject.toml                 # Project metadata and dependencies (uv)
-├── uv.lock                        # Locked dependency versions
-├── .python-version                # Python version pin (3.13)
-└── .env                           # Azure OpenAI credentials (gitignored, never commit)
+├── functional_pipeline_test/       # Functional BERTopic pipeline and statistical reports
+├── map-reduce__exploratory/        # Map-reduce recommendation workflow and site stats
+├── topic_modeling/                 # BERTopic starter notebook and noise exploration
+├── equipment_analysis/             # Equipment report docs and marimo walkthrough
+│   ├── PIPELINE_EQUIPMENT.md
+│   └── equipment_pipeline_walkthrough.py
+├── src/datachallengecapgemini/     # Main Python package and `dc` CLI
+├── templates/                      # Solar, wind, and equipment report templates
+├── tests/                           # Automated tests
+├── data/                            # Local inputs and generated outputs (gitignored)
+├── .env.example                     # Azure OpenAI configuration template
+├── pyproject.toml                   # Project metadata and dependencies (uv)
+├── uv.lock                          # Locked dependency versions
+└── .python-version                  # Python version pin (3.13)
+```
+
+### `map-reduce__exploratory/` at a glance
+
+The scripts are small, separately runnable steps rather than one orchestrated CLI. Most accept `--help` and default to inputs/outputs under `data/`; run commands from the repository root. The usual recommendation flow is extraction → cell-level prioritization and site mapping → action selection → site adaptation → impact estimate → final plan → report.
+
+| File | Role / when to use it |
+| --- | --- |
+| [`organized_extraction_agent.py`](map-reduce__exploratory/organized_extraction_agent.py) | Baseline Azure-assisted incident extraction. Use `--extract-organized` to extract structured fields for the solar incidents; it writes `data/incidents_organized_solar.csv`. |
+| [`organized_extraction_agent_turbo.py`](map-reduce__exploratory/organized_extraction_agent_turbo.py) | Parallelized variant of the organized extraction step. Choose this **or** the baseline script; both write the same organized incident output. |
+| [`fixing_plan_agent_cellulization.py`](map-reduce__exploratory/fixing_plan_agent_cellulization.py) | Deterministically aggregates organized incidents into site/topic/trigger cells, computes priorities, and writes `data/fixing_plan_solar.csv`. |
+| [`site_mapping_agent.py`](map-reduce__exploratory/site_mapping_agent.py) | Computes site-profile indicators and statistical comparisons from organized incidents; writes `data/site_mapping_solar.json`. |
+| [`fixing_plan_agent_remediation.py`](map-reduce__exploratory/fixing_plan_agent_remediation.py) | Uses cell statistics, incident evidence, and the action library to select remediation candidates; writes `data/fixing_plan_remediation_solar.json`. |
+| [`site_profile_adaptation.py`](map-reduce__exploratory/site_profile_adaptation.py) | Adapts remediation candidates using measured site indicators; writes `data/fixing_plan_remediation_solar_adapted.json`. |
+| [`impact_estimation.py`](map-reduce__exploratory/impact_estimation.py) | Adds low/central/high hypothetical avoided-cost estimates from the action library; writes `data/fixing_plan_remediation_solar_impact.json`. |
+| [`final_action_plan.py`](map-reduce__exploratory/final_action_plan.py) | Consolidates the impact-enriched recommendations and incident evidence into the final action plan JSON and CSV. |
+| [`report_generation.py`](map-reduce__exploratory/report_generation.py) | Renders the final plan as full or abbreviated French Markdown reports. |
+| [`stats_agent.py`](map-reduce__exploratory/stats_agent.py) | Separate deterministic descriptive/statistical analysis of the clusterized solar CSV; displays interactive plots and is not a step in the remediation-plan chain. |
+
+The BERTopic notebook and `C_NOISE` exploration are in [`topic_modeling/`](topic_modeling/); the `dc equipment` walkthrough is in [`equipment_analysis/`](equipment_analysis/). They are related experiments/features, not map-reduce steps.
+
+For script-specific options, inspect its help before running, for example:
+
+```bash
+uv run python map-reduce__exploratory/fixing_plan_agent_remediation.py --help
 ```
 
 ## Prerequisites
@@ -63,10 +149,17 @@ llama serve -hf datalab-to/surya-ocr-2-gguf \
 ```
 
 Keep that server running while preprocessing. In another terminal, point Surya
-to it and run the preprocessing command:
+to it and run the preprocessing command. In Bash:
 
 ```bash
 export SURYA_INFERENCE_URL=http://127.0.0.1:8080/v1
+uv run dc preprocess
+```
+
+In PowerShell:
+
+```powershell
+$env:SURYA_INFERENCE_URL = "http://127.0.0.1:8080/v1"
 uv run dc preprocess
 ```
 
@@ -126,11 +219,17 @@ and the dev dependencies (marimo).
 
 ### 3. Configure environment variables
 
-The notebook calls Azure OpenAI for embeddings and chat completions. Create a `.env` file
-in the project root:
+The pipelines use Azure OpenAI for embeddings and/or chat completions. Copy the
+provided `.env.example` to `.env` in the project root:
 
 ```bash
-cp .env.example .env   # if an example is provided, otherwise create it manually
+cp .env.example .env
+```
+
+In PowerShell:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
 Fill in your Azure OpenAI credentials:
@@ -148,9 +247,9 @@ AZURE_OPENAI_EMBEDDING_DEPLOYMENT=<your-embedding-deployment-name>
 
 ### 4. Data
 
-The dataset (`data/incidents_students.csv` and the PDF folders) is gitignored. If you are
-participating in the hackathon, the data is provided on-site. Place it in the `data/`
-directory at the project root.
+The dataset (`data/incidents_students.csv` and the PDF folders) is gitignored and
+is therefore not included in a clone. Obtain the data from the hackathon organizers
+and place it in the `data/` directory at the project root.
 
 The CSV contains 1800 incident reports with columns such as `incident_id`, `site`,
 `asset_type`, `date`, `severity`, `downtime_hours`, `estimated_cost_eur`,
@@ -202,9 +301,9 @@ Surya server setup).
 
 The pipeline ends with a report-generation step: it fills the markdown
 templates in `templates/` (`solar_report.md`, `wind_report.md`) with
-statistics computed from the clusterised CSVs, the figures from
-`data/plots/<label>/png`, and placeholder prose, then writes the filled
-reports to `filled_templates/solar/report.md` and
+statistics computed from the clusterised CSVs, figures from
+`data/plots/<label>/png`, and prose generated by Azure OpenAI report agents.
+The filled reports are written to `filled_templates/solar/report.md` and
 `filled_templates/wind/report.md`. Templates use `{{ variable_name }}`
 placeholders, including `{{ figure_<plot_name> }}` for figures. Override the
 template and output locations with `--templates-dir` and
@@ -261,15 +360,16 @@ Input: `data/incidents_clusterised_solar.csv` (written by the clustering step
 of `uv run dc --all`; override with `--solar-csv`). Outputs go to
 `equipment_reports/<site>/<equipment>/` (gitignored). Agent answers are cached
 in `sections/` and only requested again when their prompt changes (or with
-`--force [SECTION ...]`). Full documentation: `PIPELINE_EQUIPMENT.md`;
-walkthrough: `uv run marimo edit notebooks/equipment_pipeline_walkthrough.py`.
+`--force [SECTION ...]`). Full documentation:
+[`equipment_analysis/PIPELINE_EQUIPMENT.md`](equipment_analysis/PIPELINE_EQUIPMENT.md);
+walkthrough: `uv run marimo edit equipment_analysis/equipment_pipeline_walkthrough.py`.
 
 ## Running the notebook
 
 The notebook is a **marimo** notebook (not Jupyter). Start the marimo server:
 
 ```bash
-uv run marimo run notebooks/starterkit_students.py
+uv run marimo run topic_modeling/starterkit_students.py
 ```
 
 Then open the URL shown in the terminal (default: <http://localhost:2718>).
@@ -277,20 +377,20 @@ Then open the URL shown in the terminal (default: <http://localhost:2718>).
 To run the notebook as a script (non-interactive, executes all cells top to bottom):
 
 ```bash
-uv run marimo run notebooks/starterkit_students.py --no-token
+uv run marimo run topic_modeling/starterkit_students.py --no-token
 ```
 
 Or export it to other formats:
 
 ```bash
 # Export to HTML
-uv run marimo export html notebooks/starterkit_students.py -o notebook.html
+uv run marimo export html topic_modeling/starterkit_students.py -o notebook.html
 
 # Export to a Jupyter notebook (.ipynb)
-uv run marimo export ipynb notebooks/starterkit_students.py -o notebook.ipynb
+uv run marimo export ipynb topic_modeling/starterkit_students.py -o notebook.ipynb
 
 # Export to a plain Python script
-uv run marimo export script notebooks/starterkit_students.py -o notebook_script.py
+uv run marimo export script topic_modeling/starterkit_students.py -o notebook_script.py
 ```
 
 ## Editing the notebook
@@ -298,7 +398,7 @@ uv run marimo export script notebooks/starterkit_students.py -o notebook_script.
 To edit the notebook interactively, start marimo in **edit mode**:
 
 ```bash
-uv run marimo edit notebooks/starterkit_students.py
+uv run marimo edit topic_modeling/starterkit_students.py
 ```
 
 This opens the marimo editor in your browser where you can:
@@ -313,7 +413,7 @@ control with git — no JSON `.ipynb` merge conflicts.
 
 ### Notebook workflow
 
-The starter kit notebook (`notebooks/starterkit_students.py`) follows this pipeline:
+The starter kit notebook (`topic_modeling/starterkit_students.py`) follows this pipeline:
 
 1. **Configuration** — loads `.env`, sets up SSL (truststore), reads Azure OpenAI settings.
 2. **Load data** — reads `data/incidents_students.csv`, filters to `document_format == "text"`.
@@ -351,8 +451,8 @@ See [Azure OpenAI pricing](https://azure.microsoft.com/en-us/pricing/details/azu
 | `uv run dc --all` | Recompute every step, including clustering |
 | `uv run dc preprocess` | Run preprocessing (OCR + parse PDFs into a CSV) |
 | `uv run dc equipment --site OUEST1` | Equipment-level reports for a site |
-| `uv run marimo edit notebooks/starterkit_students.py` | Edit the notebook |
-| `uv run marimo run notebooks/starterkit_students.py` | Run the notebook (read-only app mode) |
+| `uv run marimo edit topic_modeling/starterkit_students.py` | Edit the notebook |
+| `uv run marimo run topic_modeling/starterkit_students.py` | Run the notebook (read-only app mode) |
 
 ## Tech stack
 
